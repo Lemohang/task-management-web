@@ -1,3 +1,4 @@
+
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   'http://localhost:3001';
@@ -16,8 +17,15 @@ export interface Task {
   id: number;
   title: string;
   description: string | null;
-  status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
-  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  status:
+    | 'TODO'
+    | 'IN_PROGRESS'
+    | 'COMPLETED';
+  priority:
+    | 'LOW'
+    | 'MEDIUM'
+    | 'HIGH'
+    | 'URGENT';
   dueDate: string | null;
   assignedTo: AssignedUser | null;
   createdAt: string;
@@ -35,6 +43,21 @@ export interface TasksResponse {
   data: Task[];
   meta: TasksMeta;
 }
+
+/* =========================
+   TASK FILTERS
+========================= */
+
+export type TaskFilters = {
+  status?: Task['status'];
+  priority?: Task['priority'];
+  due?:
+    | 'overdue'
+    | 'today'
+    | 'upcoming';
+  search?: string;
+  assignedTo?: number;
+};
 
 /* =========================
    AUTHENTICATION
@@ -80,9 +103,38 @@ export async function getTasks(
   accessToken: string,
   page = 1,
   limit = 10,
+  filters: TaskFilters = {},
 ): Promise<TasksResponse> {
+  const params = new URLSearchParams();
+
+  params.set('page', String(page));
+  params.set('limit', String(limit));
+
+  if (filters.status) {
+    params.set('status', filters.status);
+  }
+
+  if (filters.priority) {
+    params.set('priority', filters.priority);
+  }
+
+  if (filters.due) {
+    params.set('due', filters.due);
+  }
+
+  if (filters.search?.trim()) {
+    params.set('search', filters.search.trim());
+  }
+
+  if (filters.assignedTo) {
+    params.set(
+      'assignedTo',
+      String(filters.assignedTo),
+    );
+  }
+
   const response = await fetch(
-    `${API_URL}/tasks?page=${page}&limit=${limit}`,
+    `${API_URL}/tasks?${params.toString()}`,
     {
       method: 'GET',
       headers: {
@@ -106,6 +158,69 @@ export async function getTasks(
 
   return data;
 }
+
+/* =========================
+   GET MY TASKS
+========================= */
+
+export async function getMyTasks(
+  accessToken: string,
+  page = 1,
+  limit = 10,
+  filters: TaskFilters = {},
+): Promise<TasksResponse> {
+  const params = new URLSearchParams();
+
+  params.set('page', String(page));
+  params.set('limit', String(limit));
+
+  if (filters.status) {
+    params.set('status', filters.status);
+  }
+
+  if (filters.priority) {
+    params.set('priority', filters.priority);
+  }
+
+  if (filters.due) {
+    params.set('due', filters.due);
+  }
+
+  if (filters.search?.trim()) {
+    params.set(
+      'search',
+      filters.search.trim(),
+    );
+  }
+
+  const response = await fetch(
+    `${API_URL}/tasks/my?${params.toString()}`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+    },
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      Array.isArray(data.message)
+        ? data.message[0]
+        : data.message ||
+          'Unable to load your tasks.',
+    );
+  }
+
+  return data;
+}
+
+
+
 
 /* =========================
    GET USERS
@@ -139,8 +254,6 @@ export async function getUsers(
 
   return data;
 }
-
-
 
 /* =========================
    CREATE TASK
@@ -189,8 +302,6 @@ export async function createTask(
 
   return data;
 }
-
-
 
 /* =========================
    UPDATE TASK
@@ -242,6 +353,24 @@ export async function updateTask(
 }
 
 /* =========================
+   UPDATE TASK STATUS
+========================= */
+
+export async function updateTaskStatus(
+  accessToken: string,
+  taskId: number,
+  status: Task['status'],
+) {
+  return updateTask(
+    accessToken,
+    taskId,
+    {
+      status,
+    },
+  );
+}
+
+/* =========================
    DELETE TASK
 ========================= */
 
@@ -272,3 +401,4 @@ export async function deleteTask(
 
   return true;
 }
+

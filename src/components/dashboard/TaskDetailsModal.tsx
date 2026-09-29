@@ -10,6 +10,7 @@ import {
   User,
   X,
 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 
 import { Task } from '@/lib/api';
 
@@ -18,13 +19,14 @@ type TaskDetailsModalProps = {
   open: boolean;
   onClose: () => void;
   onEdit: () => void;
+  onDelete: () => void;
 };
-
 export default function TaskDetailsModal({
   task,
   open,
   onClose,
   onEdit,
+  onDelete,
 }: TaskDetailsModalProps) {
   if (!open || !task) return null;
 
@@ -205,6 +207,13 @@ export default function TaskDetailsModal({
               <Edit3 className="h-3.5 w-3.5" />
               Edit task
             </button>
+          <button
+              onClick={onDelete}
+              className="flex items-center justify-center gap-2 rounded-xl border border-red-400/15 bg-red-500/[0.06] px-5 py-2.5 text-xs font-semibold text-red-300 transition hover:border-red-400/30 hover:bg-red-500/[0.1]"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete task
+        </button>
           </div>
         </div>
       </div>

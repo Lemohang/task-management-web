@@ -1,7 +1,13 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
 import {
   AlertTriangle,
   ArrowRight,
@@ -21,31 +27,82 @@ import {
   Users,
 } from 'lucide-react';
 
-import { getTasks, Task } from '@/lib/api';
+import {
+  getTasks,
+  getUsers,
+  Task,
+  TaskFilters as TaskFilterValues,
+  AssignedUser,
+} from '@/lib/api';
+
 import CreateTaskModal from '@/components/dashboard/CreateTaskModal';
 import TaskDetailsModal from '@/components/dashboard/TaskDetailsModal';
+import EditTaskModal from '@/components/dashboard/EditTaskModal';
+import DeleteTaskModal from '@/components/dashboard/DeleteTaskModal';
 import StatCard from '@/components/dashboard/StatCard';
 import TaskRow from '@/components/dashboard/TaskRow';
+import TaskFilters from '@/components/dashboard/TaskFilters';
 
 const navItems = [
-  { label: 'Dashboard', icon: LayoutDashboard },
-  { label: 'My Tasks', icon: CheckCircle2 },
-  { label: 'Team', icon: Users },
-  { label: 'Calendar', icon: Calendar },
+  {
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+  },
+  {
+    label: 'My Tasks',
+    icon: CheckCircle2,
+  },
+  {
+    label: 'Team',
+    icon: Users,
+  },
+  {
+    label: 'Calendar',
+    icon: Calendar,
+  },
 ];
 
 export default function DashboardPage() {
+  /* =========================
+     TASK STATE
+  ========================= */
+
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [users, setUsers] = useState<AssignedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
- const [createModalOpen, setCreateModalOpen] =
-  useState(false);
 
-const [selectedTask, setSelectedTask] =
-  useState<Task | null>(null);
-  const loadTasks = async () => {
+  /* =========================
+     FILTER STATE
+  ========================= */
+
+  const [filters, setFilters] =
+    useState<TaskFilterValues>({});
+
+  /* =========================
+     UI STATE
+  ========================= */
+
+  const [sidebarOpen, setSidebarOpen] =
+    useState(false);
+
+  const [createModalOpen, setCreateModalOpen] =
+    useState(false);
+
+  const [selectedTask, setSelectedTask] =
+    useState<Task | null>(null);
+
+  const [editTask, setEditTask] =
+    useState<Task | null>(null);
+
+  const [deleteTaskItem, setDeleteTaskItem] =
+    useState<Task | null>(null);
+
+  /* =========================
+     LOAD TASKS
+  ========================= */
+
+  const loadTasks = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -58,7 +115,12 @@ const [selectedTask, setSelectedTask] =
         return;
       }
 
-      const response = await getTasks(token);
+      const response = await getTasks(
+        token,
+        1,
+        10,
+        filters,
+      );
 
       setTasks(response.data);
     } catch (err) {
@@ -70,53 +132,94 @@ const [selectedTask, setSelectedTask] =
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
+
+  /* =========================
+     LOAD USERS
+  ========================= */
+
+  const loadUsers = useCallback(async () => {
+    try {
+      const token =
+        localStorage.getItem('accessToken');
+
+      if (!token) return;
+
+      const data = await getUsers(token);
+
+      setUsers(data);
+    } catch {
+      // User filtering is optional.
+      // Do not break the dashboard if it fails.
+    }
+  }, []);
+
+  /* =========================
+     INITIAL LOAD
+  ========================= */
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  /* =========================
+     LOAD WHEN FILTERS CHANGE
+  ========================= */
 
   useEffect(() => {
     loadTasks();
-  }, []);
+  }, [loadTasks]);
+
+  /* =========================
+     STATISTICS
+  ========================= */
 
   const statistics = useMemo(
     () => ({
       total: tasks.length,
 
       todo: tasks.filter(
-        (task) => task.status === 'TODO',
+        (task) =>
+          task.status === 'TODO',
       ).length,
 
       inProgress: tasks.filter(
-        (task) => task.status === 'IN_PROGRESS',
+        (task) =>
+          task.status === 'IN_PROGRESS',
       ).length,
 
       completed: tasks.filter(
-        (task) => task.status === 'COMPLETED',
+        (task) =>
+          task.status === 'COMPLETED',
       ).length,
     }),
     [tasks],
   );
 
-  const filteredTasks = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  /* =========================
+     SEARCH VALUE
+  ========================= */
 
-    if (!query) return tasks;
+  const searchValue =
+    filters.search ?? '';
 
-    return tasks.filter((task) =>
-      [
-        task.title,
-        task.description,
-        task.status,
-        task.priority,
-        task.assignedTo?.name,
-      ]
-        .filter(Boolean)
-        .some((value) =>
-          value!.toLowerCase().includes(query),
-        ),
-    );
-  }, [tasks, search]);
+  /* =========================
+     RESET FILTERS
+  ========================= */
+
+  const resetFilters = () => {
+    setFilters({});
+  };
+
+  /* =========================
+     LOGOUT
+  ========================= */
 
   const handleLogout = () => {
-    localStorage.removeItem('accessToken');
+    localStorage.removeItem(
+      'accessToken',
+    );
+
     window.location.href = '/';
   };
 
@@ -124,16 +227,21 @@ const [selectedTask, setSelectedTask] =
     <main className="relative min-h-screen overflow-hidden bg-[#010705] text-white">
       <Background />
 
-      {/* Mobile overlay */}
+      {/* MOBILE OVERLAY */}
+
       {sidebarOpen && (
         <button
-          onClick={() => setSidebarOpen(false)}
+          type="button"
+          onClick={() =>
+            setSidebarOpen(false)
+          }
           aria-label="Close navigation"
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
         />
       )}
 
-      {/* Sidebar */}
+      {/* SIDEBAR */}
+
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-[270px] flex-col border-r border-white/[0.06] bg-[#020908]/95 px-5 py-6 backdrop-blur-2xl transition-transform duration-300 lg:translate-x-0 ${
           sidebarOpen
@@ -142,6 +250,7 @@ const [selectedTask, setSelectedTask] =
         }`}
       >
         {/* Brand */}
+
         <div className="mb-10 flex items-center gap-3 px-2">
           <div className="relative flex h-11 w-11 items-center justify-center">
             <div className="absolute inset-0 rounded-xl bg-[#39ff14]/20 blur-xl" />
@@ -167,6 +276,7 @@ const [selectedTask, setSelectedTask] =
         </div>
 
         {/* Workspace */}
+
         <div className="mb-3 px-3 text-[9px] font-semibold tracking-[0.22em] text-white/25">
           WORKSPACE
         </div>
@@ -179,6 +289,7 @@ const [selectedTask, setSelectedTask] =
             return (
               <button
                 key={item.label}
+                type="button"
                 className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-all ${
                   active
                     ? 'border border-[#39ff14]/10 bg-[#39ff14]/[0.08] text-white'
@@ -208,11 +319,15 @@ const [selectedTask, setSelectedTask] =
         </nav>
 
         {/* System */}
+
         <div className="mb-3 mt-9 px-3 text-[9px] font-semibold tracking-[0.22em] text-white/25">
           SYSTEM
         </div>
 
-        <button className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/45 transition hover:bg-white/[0.035] hover:text-white">
+        <button
+          type="button"
+          className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/45 transition hover:bg-white/[0.035] hover:text-white"
+        >
           <Settings className="h-4 w-4 text-white/40 group-hover:text-white/70" />
 
           <span className="font-medium">
@@ -221,6 +336,7 @@ const [selectedTask, setSelectedTask] =
         </button>
 
         {/* Bottom */}
+
         <div className="mt-auto border-t border-white/[0.06] pt-5">
           <div className="mb-3 flex items-center gap-3 px-2">
             <Avatar />
@@ -239,6 +355,7 @@ const [selectedTask, setSelectedTask] =
           </div>
 
           <button
+            type="button"
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/35 transition hover:bg-red-500/[0.06] hover:text-red-300"
           >
@@ -249,12 +366,17 @@ const [selectedTask, setSelectedTask] =
         </div>
       </aside>
 
-      {/* Main */}
+      {/* MAIN */}
+
       <section className="relative min-h-screen lg:pl-[270px]">
-        {/* Top bar */}
+        {/* TOP BAR */}
+
         <header className="sticky top-0 z-30 flex h-[76px] items-center gap-4 border-b border-white/[0.05] bg-[#010705]/75 px-5 backdrop-blur-2xl sm:px-8 lg:px-10">
           <button
-            onClick={() => setSidebarOpen(true)}
+            type="button"
+            onClick={() =>
+              setSidebarOpen(true)
+            }
             aria-label="Open navigation"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.025] text-white/60 lg:hidden"
           >
@@ -262,15 +384,21 @@ const [selectedTask, setSelectedTask] =
           </button>
 
           {/* Search */}
+
           <div className="relative flex h-11 max-w-[520px] flex-1">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
 
             <input
               type="text"
               placeholder="Search tasks, people, projects..."
-              value={search}
+              value={searchValue}
               onChange={(event) =>
-                setSearch(event.target.value)
+                setFilters((current) => ({
+                  ...current,
+                  search:
+                    event.target.value ||
+                    undefined,
+                }))
               }
               className="h-full w-full rounded-xl border border-white/[0.06] bg-white/[0.025] pl-11 pr-16 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-[#39ff14]/20 focus:bg-white/[0.035]"
             />
@@ -281,8 +409,12 @@ const [selectedTask, setSelectedTask] =
           </div>
 
           {/* User */}
+
           <div className="ml-auto flex items-center gap-3">
-            <button className="relative flex h-10 w-10 items-center justify-center rounded-xl text-white/40 transition hover:bg-white/[0.04] hover:text-white">
+            <button
+              type="button"
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl text-white/40 transition hover:bg-white/[0.04] hover:text-white"
+            >
               <Bell className="h-4 w-4" />
 
               <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_8px_rgba(57,255,20,0.9)]" />
@@ -306,9 +438,11 @@ const [selectedTask, setSelectedTask] =
           </div>
         </header>
 
-        {/* Content */}
+        {/* CONTENT */}
+
         <div className="mx-auto w-full max-w-[1500px] px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
           {/* Welcome */}
+
           <section className="mb-9 flex flex-col justify-between gap-6 xl:flex-row xl:items-end">
             <div>
               <div className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#39ff14]/70">
@@ -327,13 +461,14 @@ const [selectedTask, setSelectedTask] =
               </h1>
 
               <p className="mt-4 max-w-[600px] text-sm leading-6 text-white/35 sm:text-[15px]">
-                Stay focused, keep the team aligned, and
-                turn today's responsibilities into meaningful
-                progress.
+                Stay focused, keep the team aligned,
+                and turn today's responsibilities into
+                meaningful progress.
               </p>
             </div>
 
             <button
+              type="button"
               onClick={() =>
                 setCreateModalOpen(true)
               }
@@ -346,6 +481,7 @@ const [selectedTask, setSelectedTask] =
           </section>
 
           {/* Error */}
+
           {error && (
             <div className="mb-6 flex items-start gap-4 rounded-2xl border border-red-400/10 bg-red-500/[0.05] p-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-300">
@@ -365,6 +501,7 @@ const [selectedTask, setSelectedTask] =
           )}
 
           {/* Statistics */}
+
           <section className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label="Total tasks"
@@ -379,7 +516,9 @@ const [selectedTask, setSelectedTask] =
             <StatCard
               label="To do"
               value={statistics.todo}
-              icon={<Circle className="h-4 w-4" />}
+              icon={
+                <Circle className="h-4 w-4" />
+              }
               accent="blue"
               description="Waiting to be started"
             />
@@ -387,7 +526,9 @@ const [selectedTask, setSelectedTask] =
             <StatCard
               label="In progress"
               value={statistics.inProgress}
-              icon={<Circle className="h-4 w-4" />}
+              icon={
+                <Circle className="h-4 w-4" />
+              }
               accent="orange"
               description="Currently being worked on"
             />
@@ -395,59 +536,90 @@ const [selectedTask, setSelectedTask] =
             <StatCard
               label="Completed"
               value={statistics.completed}
-              icon={<Check className="h-4 w-4" />}
+              icon={
+                <Check className="h-4 w-4" />
+              }
               accent="purple"
               description="Successfully finished"
             />
           </section>
 
-          {/* Recent tasks */}
-          <section className="mb-7 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.018] shadow-[0_20px_80px_rgba(0,0,0,0.18)] backdrop-blur-xl">
-            <div className="flex flex-col justify-between gap-4 border-b border-white/[0.05] px-5 py-5 sm:flex-row sm:items-center sm:px-6">
-              <div>
-                <div className="flex items-center gap-3">
-                  <h2 className="text-base font-semibold text-white/90">
-                    Recent tasks
-                  </h2>
+          {/* RECENT TASKS */}
 
-                  <span className="rounded-full border border-white/[0.06] bg-white/[0.035] px-2 py-0.5 text-[10px] font-medium text-white/35">
-                    {tasks.length}
-                  </span>
+          <section className="mb-7 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.018] shadow-[0_20px_80px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+            <div className="border-b border-white/[0.05] px-5 py-5 sm:px-6">
+              <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-base font-semibold text-white/90">
+                      Recent tasks
+                    </h2>
+
+                    <span className="rounded-full border border-white/[0.06] bg-white/[0.035] px-2 py-0.5 text-[10px] font-medium text-white/35">
+                      {tasks.length}
+                    </span>
+                  </div>
+
+                  <p className="mt-1.5 text-xs text-white/30">
+                    Keep an eye on what's happening
+                    across the workspace.
+                  </p>
                 </div>
 
-                <p className="mt-1.5 text-xs text-white/30">
-                  Keep an eye on what's happening across
-                  the workspace.
-                </p>
+                <button
+                  type="button"
+                  className="group flex items-center gap-2 text-xs font-medium text-white/35 transition hover:text-[#39ff14]"
+                >
+                  View all
+
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </button>
               </div>
 
-              <button className="group flex items-center gap-2 text-xs font-medium text-white/35 transition hover:text-[#39ff14]">
-                View all
+              {/* FILTERS */}
 
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </button>
+              <div className="mt-5">
+                <TaskFilters
+                  filters={filters}
+                  onChange={setFilters}
+                  onReset={resetFilters}
+                  users={users}
+                />
+              </div>
             </div>
+
+            {/* TASK CONTENT */}
 
             {loading ? (
               <Loading />
-            ) : filteredTasks.length === 0 ? (
-              <EmptyState search={search} />
+            ) : tasks.length === 0 ? (
+              <EmptyState
+                search={searchValue}
+                hasFilters={hasActiveFilters(
+                  filters,
+                )}
+              />
             ) : (
               <div className="divide-y divide-white/[0.045]">
-                {filteredTasks.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  onClick={() => setSelectedTask(task)}
-                />
-              ))}
-            </div>
+                {tasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    onClick={() =>
+                      setSelectedTask(task)
+                    }
+                    onUpdated={loadTasks}
+                  />
+                ))}
+              </div>
             )}
           </section>
 
-          {/* Bottom */}
+          {/* BOTTOM */}
+
           <section className="grid grid-cols-1 gap-5 xl:grid-cols-[1.5fr_1fr]">
             {/* Workflow */}
+
             <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.035] to-white/[0.012] p-6">
               <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-[#39ff14]/10 blur-[70px]" />
 
@@ -525,6 +697,7 @@ const [selectedTask, setSelectedTask] =
             </div>
 
             {/* Quick action */}
+
             <div className="group relative overflow-hidden rounded-2xl border border-[#39ff14]/10 bg-[#39ff14]/[0.035] p-6 transition hover:border-[#39ff14]/20 hover:bg-[#39ff14]/[0.05]">
               <div className="absolute -bottom-20 -right-20 h-44 w-44 rounded-full bg-[#39ff14]/10 blur-[70px]" />
 
@@ -547,6 +720,7 @@ const [selectedTask, setSelectedTask] =
                 </p>
 
                 <button
+                  type="button"
                   onClick={() =>
                     setCreateModalOpen(true)
                   }
@@ -560,7 +734,8 @@ const [selectedTask, setSelectedTask] =
         </div>
       </section>
 
-      {/* Create task modal */}
+      {/* CREATE */}
+
       <CreateTaskModal
         open={createModalOpen}
         onClose={() =>
@@ -568,21 +743,56 @@ const [selectedTask, setSelectedTask] =
         }
         onCreated={loadTasks}
       />
+
+      {/* DETAILS */}
+
       <TaskDetailsModal
         task={selectedTask}
         open={selectedTask !== null}
-        onClose={() => setSelectedTask(null)}
+        onClose={() =>
+          setSelectedTask(null)
+        }
         onEdit={() => {
-        
+          setEditTask(selectedTask);
+          setSelectedTask(null);
         }}
-/>
+        onDelete={() => {
+          setDeleteTaskItem(selectedTask);
+          setSelectedTask(null);
+        }}
+      />
+
+      {/* DELETE */}
+
+      <DeleteTaskModal
+          task={deleteTaskItem}
+          open={!!deleteTaskItem}
+          onClose={() => setDeleteTaskItem(null)}
+          onDeleted={() => {
+            setDeleteTaskItem(null);
+            loadTasks();
+          }}
+        />
+      {/* EDIT */}
+
+      <EditTaskModal
+      task={editTask}
+      open={!!editTask}
+      onClose={() => setEditTask(null)}
+      onUpdated={() => {
+        setEditTask(null);
+        loadTasks();
+      }}
+    />
     </main>
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Small reusable pieces                                                       */
-/* -------------------------------------------------------------------------- */
+/* ==========================================================================
+
+   BACKGROUND
+
+========================================================================== */
 
 function Background() {
   return (
@@ -605,6 +815,12 @@ function Background() {
   );
 }
 
+/* ==========================================================================
+
+   AVATAR
+
+========================================================================== */
+
 function Avatar() {
   return (
     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#39ff14]/20 bg-[#39ff14]/10 text-[10px] font-bold text-[#39ff14]">
@@ -612,6 +828,12 @@ function Avatar() {
     </div>
   );
 }
+
+/* ==========================================================================
+
+   LOADING
+
+========================================================================== */
 
 function Loading() {
   return (
@@ -625,10 +847,18 @@ function Loading() {
   );
 }
 
+/* ==========================================================================
+
+   EMPTY STATE
+
+========================================================================== */
+
 function EmptyState({
   search,
+  hasFilters,
 }: {
   search: string;
+  hasFilters: boolean;
 }) {
   return (
     <div className="flex min-h-[260px] flex-col items-center justify-center px-5 text-center">
@@ -643,11 +873,19 @@ function EmptyState({
       <p className="mt-1.5 text-xs text-white/30">
         {search
           ? 'Try adjusting your search.'
-          : 'Your workspace is ready for its first task.'}
+          : hasFilters
+            ? 'Try changing or clearing your filters.'
+            : 'Your workspace is ready for its first task.'}
       </p>
     </div>
   );
 }
+
+/* ==========================================================================
+
+   LEGEND
+
+========================================================================== */
 
 function Legend({
   color,
@@ -666,6 +904,30 @@ function Legend({
     </span>
   );
 }
+
+/* ==========================================================================
+
+   ACTIVE FILTER CHECK
+
+========================================================================== */
+
+function hasActiveFilters(
+  filters: TaskFilterValues,
+) {
+  return Boolean(
+    filters.search ||
+      filters.status ||
+      filters.priority ||
+      filters.due ||
+      filters.assignedTo,
+  );
+}
+
+/* ==========================================================================
+
+   PERCENTAGE
+
+========================================================================== */
 
 function percentage(
   value: number,
