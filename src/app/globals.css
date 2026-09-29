@@ -2801,3 +2801,13 @@ input {
     display: none;
   }
 }
+
+@layer components {
+  .input {
+    @apply h-11 w-full rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 text-xs text-white outline-none transition placeholder:text-white/20 focus:border-[#39ff14]/25 focus:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .input option {
+    @apply bg-[#07100d] text-white;
+  }
+}

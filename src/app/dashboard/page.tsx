@@ -1,15 +1,38 @@
+
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  getTasks,
-  Task,
-} from '@/lib/api';
+  AlertTriangle,
+  ArrowRight,
+  Bell,
+  Calendar,
+  Check,
+  CheckCircle2,
+  Circle,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Settings,
+  Sparkles,
+  Users,
+} from 'lucide-react';
 
-type NavItem = {
-  label: string;
-  icon: React.ReactNode;
-};
+import { getTasks, Task } from '@/lib/api';
+import CreateTaskModal from '@/components/dashboard/CreateTaskModal';
+import TaskDetailsModal from '@/components/dashboard/TaskDetailsModal';
+import StatCard from '@/components/dashboard/StatCard';
+import TaskRow from '@/components/dashboard/TaskRow';
+
+const navItems = [
+  { label: 'Dashboard', icon: LayoutDashboard },
+  { label: 'My Tasks', icon: CheckCircle2 },
+  { label: 'Team', icon: Users },
+  { label: 'Calendar', icon: Calendar },
+];
 
 export default function DashboardPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -17,74 +40,79 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+ const [createModalOpen, setCreateModalOpen] =
+  useState(false);
+
+const [selectedTask, setSelectedTask] =
+  useState<Task | null>(null);
+  const loadTasks = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const token =
+        localStorage.getItem('accessToken');
+
+      if (!token) {
+        window.location.href = '/';
+        return;
+      }
+
+      const response = await getTasks(token);
+
+      setTasks(response.data);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to load dashboard.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadDashboard = async () => {
-      try {
-        const token =
-          localStorage.getItem('accessToken');
-
-        if (!token) {
-          window.location.href = '/';
-          return;
-        }
-
-        const response = await getTasks(token);
-
-        setTasks(response.data);
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Unable to load dashboard.',
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadDashboard();
+    loadTasks();
   }, []);
 
-  const statistics = useMemo(() => {
-    return {
+  const statistics = useMemo(
+    () => ({
       total: tasks.length,
+
       todo: tasks.filter(
         (task) => task.status === 'TODO',
       ).length,
+
       inProgress: tasks.filter(
         (task) => task.status === 'IN_PROGRESS',
       ).length,
+
       completed: tasks.filter(
         (task) => task.status === 'COMPLETED',
       ).length,
-    };
-  }, [tasks]);
+    }),
+    [tasks],
+  );
 
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    if (!query) {
-      return tasks;
-    }
+    if (!query) return tasks;
 
-    return tasks.filter((task) => {
-      return (
-        task.title.toLowerCase().includes(query) ||
-        task.description
-          ?.toLowerCase()
-          .includes(query) ||
-        task.status
-          .toLowerCase()
-          .includes(query) ||
-        task.priority
-          .toLowerCase()
-          .includes(query) ||
-        task.assignedTo?.name
-          ?.toLowerCase()
-          .includes(query)
-      );
-    });
+    return tasks.filter((task) =>
+      [
+        task.title,
+        task.description,
+        task.status,
+        task.priority,
+        task.assignedTo?.name,
+      ]
+        .filter(Boolean)
+        .some((value) =>
+          value!.toLowerCase().includes(query),
+        ),
+    );
   }, [tasks, search]);
 
   const handleLogout = () => {
@@ -92,182 +120,150 @@ export default function DashboardPage() {
     window.location.href = '/';
   };
 
-  const navItems: NavItem[] = [
-    {
-      label: 'Dashboard',
-      icon: <DashboardIcon />,
-    },
-    {
-      label: 'My Tasks',
-      icon: <TaskIcon />,
-    },
-    {
-      label: 'Team',
-      icon: <UsersIcon />,
-    },
-    {
-      label: 'Calendar',
-      icon: <CalendarIcon />,
-    },
-  ];
-
   return (
-    <main className="dashboard-page">
+    <main className="relative min-h-screen overflow-hidden bg-[#010705] text-white">
+      <Background />
 
-      {/* BACKGROUND */}
-
-      <div className="dashboard-background">
-        <div className="dashboard-glow glow-one" />
-        <div className="dashboard-glow glow-two" />
-        <div className="dashboard-glow glow-three" />
-
-        <div className="dashboard-grid" />
-
-        {Array.from({ length: 45 }).map(
-          (_, index) => (
-            <span
-              key={index}
-              className="dashboard-particle"
-              style={{
-                left: `${(index * 37) % 100}%`,
-                top: `${(index * 61) % 100}%`,
-                animationDelay: `${(
-                  index * 0.17
-                ).toFixed(2)}s`,
-              }}
-            />
-          ),
-        )}
-      </div>
-
-      {/* MOBILE OVERLAY */}
-
+      {/* Mobile overlay */}
       {sidebarOpen && (
         <button
-          className="sidebar-overlay"
           onClick={() => setSidebarOpen(false)}
           aria-label="Close navigation"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
         />
       )}
 
-      {/* SIDEBAR */}
-
+      {/* Sidebar */}
       <aside
-        className={`dashboard-sidebar ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[270px] flex-col border-r border-white/[0.06] bg-[#020908]/95 px-5 py-6 backdrop-blur-2xl transition-transform duration-300 lg:translate-x-0 ${
           sidebarOpen
-            ? 'dashboard-sidebar-open'
-            : ''
+            ? 'translate-x-0'
+            : '-translate-x-full'
         }`}
       >
-        <div className="sidebar-brand">
-          <div className="sidebar-logo-wrap">
-            <div className="sidebar-logo-glow" />
+        {/* Brand */}
+        <div className="mb-10 flex items-center gap-3 px-2">
+          <div className="relative flex h-11 w-11 items-center justify-center">
+            <div className="absolute inset-0 rounded-xl bg-[#39ff14]/20 blur-xl" />
 
-            <img
-              src="/mpuglogo.png"
-              alt="MPlug"
-            />
+            <div className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-[#39ff14]/20 bg-white/[0.04]">
+              <img
+                src="/mpuglogo.png"
+                alt="MPlug"
+                className="h-8 w-8 object-contain"
+              />
+            </div>
           </div>
 
           <div>
-            <strong>MPLUG</strong>
+            <strong className="block text-sm font-bold tracking-[0.18em]">
+              MPLUG
+            </strong>
 
-            <span>
+            <span className="mt-0.5 block text-[9px] font-medium tracking-[0.25em] text-white/35">
               TASK MANAGEMENT
             </span>
           </div>
         </div>
 
-        <div className="sidebar-section-label">
+        {/* Workspace */}
+        <div className="mb-3 px-3 text-[9px] font-semibold tracking-[0.22em] text-white/25">
           WORKSPACE
         </div>
 
-        <nav className="sidebar-nav">
-          {navItems.map((item, index) => (
-            <button
-              key={item.label}
-              className={`sidebar-nav-item ${
-                index === 0
-                  ? 'sidebar-nav-active'
-                  : ''
-              }`}
-            >
-              <span className="nav-icon">
-                {item.icon}
-              </span>
+        <nav className="space-y-1">
+          {navItems.map((item, index) => {
+            const Icon = item.icon;
+            const active = index === 0;
 
-              <span>{item.label}</span>
+            return (
+              <button
+                key={item.label}
+                className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-all ${
+                  active
+                    ? 'border border-[#39ff14]/10 bg-[#39ff14]/[0.08] text-white'
+                    : 'text-white/45 hover:bg-white/[0.035] hover:text-white'
+                }`}
+              >
+                <span
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                    active
+                      ? 'bg-[#39ff14]/10 text-[#39ff14]'
+                      : 'text-white/40 group-hover:text-white/70'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
 
-              {index === 0 && (
-                <span className="active-indicator" />
-              )}
-            </button>
-          ))}
+                <span className="font-medium">
+                  {item.label}
+                </span>
+
+                {active && (
+                  <span className="absolute right-3 h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_10px_rgba(57,255,20,0.9)]" />
+                )}
+              </button>
+            );
+          })}
         </nav>
 
-        <div className="sidebar-section-label sidebar-section-spaced">
+        {/* System */}
+        <div className="mb-3 mt-9 px-3 text-[9px] font-semibold tracking-[0.22em] text-white/25">
           SYSTEM
         </div>
 
-        <nav className="sidebar-nav">
-          <button className="sidebar-nav-item">
-            <span className="nav-icon">
-              <SettingsIcon />
-            </span>
+        <button className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/45 transition hover:bg-white/[0.035] hover:text-white">
+          <Settings className="h-4 w-4 text-white/40 group-hover:text-white/70" />
 
-            <span>Settings</span>
-          </button>
-        </nav>
+          <span className="font-medium">
+            Settings
+          </span>
+        </button>
 
-        <div className="sidebar-bottom">
-          <div className="sidebar-user">
-            <div className="user-avatar">
-              MP
+        {/* Bottom */}
+        <div className="mt-auto border-t border-white/[0.06] pt-5">
+          <div className="mb-3 flex items-center gap-3 px-2">
+            <Avatar />
+
+            <div className="min-w-0 flex-1">
+              <strong className="block truncate text-xs font-semibold text-white/80">
+                MPlug Admin
+              </strong>
+
+              <span className="text-[10px] text-white/30">
+                Workspace
+              </span>
             </div>
 
-            <div className="sidebar-user-info">
-              <strong>MPlug Admin</strong>
-              <span>Workspace</span>
-            </div>
-
-            <button
-              className="sidebar-user-menu"
-              aria-label="User menu"
-            >
-              <MoreIcon />
-            </button>
+            <MoreHorizontal className="h-4 w-4 text-white/25" />
           </div>
 
           <button
-            className="logout-button"
             onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/35 transition hover:bg-red-500/[0.06] hover:text-red-300"
           >
-            <LogoutIcon />
+            <LogOut className="h-4 w-4" />
+
             <span>Sign out</span>
           </button>
         </div>
       </aside>
 
-      {/* MAIN */}
-
-      <section className="dashboard-main">
-
-        {/* TOP BAR */}
-
-        <header className="dashboard-topbar">
-
+      {/* Main */}
+      <section className="relative min-h-screen lg:pl-[270px]">
+        {/* Top bar */}
+        <header className="sticky top-0 z-30 flex h-[76px] items-center gap-4 border-b border-white/[0.05] bg-[#010705]/75 px-5 backdrop-blur-2xl sm:px-8 lg:px-10">
           <button
-            className="mobile-menu-button"
-            onClick={() =>
-              setSidebarOpen(true)
-            }
+            onClick={() => setSidebarOpen(true)}
             aria-label="Open navigation"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.025] text-white/60 lg:hidden"
           >
-            <MenuIcon />
+            <Menu className="h-5 w-5" />
           </button>
 
-          <div className="topbar-search">
-            <SearchIcon />
+          {/* Search */}
+          <div className="relative flex h-11 max-w-[520px] flex-1">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
 
             <input
               type="text"
@@ -276,99 +272,106 @@ export default function DashboardPage() {
               onChange={(event) =>
                 setSearch(event.target.value)
               }
+              className="h-full w-full rounded-xl border border-white/[0.06] bg-white/[0.025] pl-11 pr-16 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-[#39ff14]/20 focus:bg-white/[0.035]"
             />
 
-            <span className="search-shortcut">
+            <span className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-white/[0.07] bg-white/[0.035] px-2 py-1 text-[10px] text-white/25 sm:block">
               ⌘ K
             </span>
           </div>
 
-          <div className="topbar-actions">
+          {/* User */}
+          <div className="ml-auto flex items-center gap-3">
+            <button className="relative flex h-10 w-10 items-center justify-center rounded-xl text-white/40 transition hover:bg-white/[0.04] hover:text-white">
+              <Bell className="h-4 w-4" />
 
-            <button
-              className="topbar-icon-button"
-              aria-label="Notifications"
-            >
-              <BellIcon />
-              <span className="notification-dot" />
+              <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_8px_rgba(57,255,20,0.9)]" />
             </button>
 
-            <div className="topbar-divider" />
+            <div className="hidden h-7 w-px bg-white/[0.07] sm:block" />
 
-            <div className="topbar-profile">
-              <div className="profile-avatar">
-                MP
+            <div className="hidden items-center gap-3 sm:flex">
+              <Avatar />
+
+              <div className="hidden md:block">
+                <strong className="block text-xs font-semibold text-white/75">
+                  MPlug Admin
+                </strong>
+
+                <span className="text-[10px] text-white/30">
+                  Administrator
+                </span>
               </div>
-
-              <div className="profile-text">
-                <strong>MPlug Admin</strong>
-                <span>Administrator</span>
-              </div>
-
-              <ChevronIcon />
             </div>
           </div>
         </header>
 
-        {/* CONTENT */}
-
-        <div className="dashboard-content">
-
-          {/* WELCOME */}
-
-          <section className="dashboard-heading">
-
+        {/* Content */}
+        <div className="mx-auto w-full max-w-[1500px] px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
+          {/* Welcome */}
+          <section className="mb-9 flex flex-col justify-between gap-6 xl:flex-row xl:items-end">
             <div>
-              <div className="dashboard-eyebrow">
-                <span />
+              <div className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#39ff14]/70">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_8px_rgba(57,255,20,0.8)]" />
+
                 MPlug Workspace
               </div>
 
-              <h1>
+              <h1 className="max-w-[700px] text-3xl font-semibold leading-[1.15] tracking-[-0.03em] sm:text-4xl lg:text-[44px]">
                 Good morning,
                 <br />
-                <span>let's get things moving.</span>
+
+                <span className="bg-gradient-to-r from-white via-white to-[#39ff14] bg-clip-text text-transparent">
+                  let's get things moving.
+                </span>
               </h1>
 
-              <p>
-                Stay focused, keep the team aligned,
-                and turn today's responsibilities into
-                meaningful progress.
+              <p className="mt-4 max-w-[600px] text-sm leading-6 text-white/35 sm:text-[15px]">
+                Stay focused, keep the team aligned, and
+                turn today's responsibilities into meaningful
+                progress.
               </p>
             </div>
 
-            <button className="create-task-button">
-              <PlusIcon />
-              <span>Create task</span>
+            <button
+              onClick={() =>
+                setCreateModalOpen(true)
+              }
+              className="flex w-fit items-center gap-2.5 rounded-xl border border-[#39ff14]/20 bg-[#39ff14]/[0.09] px-5 py-3 text-sm font-semibold text-[#b9ffad] shadow-[0_0_30px_rgba(57,255,20,0.06)] transition hover:border-[#39ff14]/40 hover:bg-[#39ff14]/[0.14]"
+            >
+              <Plus className="h-4 w-4" />
+
+              Create task
             </button>
           </section>
 
-          {/* ERROR */}
-
+          {/* Error */}
           {error && (
-            <div className="dashboard-error">
-              <span>
-                <AlertIcon />
-              </span>
+            <div className="mb-6 flex items-start gap-4 rounded-2xl border border-red-400/10 bg-red-500/[0.05] p-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-300">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
 
               <div>
-                <strong>
+                <strong className="text-sm text-red-200">
                   Something went wrong
                 </strong>
 
-                <p>{error}</p>
+                <p className="mt-1 text-xs leading-5 text-red-200/50">
+                  {error}
+                </p>
               </div>
             </div>
           )}
 
-          {/* STATISTICS */}
-
-          <section className="stats-grid">
-
+          {/* Statistics */}
+          <section className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label="Total tasks"
               value={statistics.total}
-              icon={<TaskIcon />}
+              icon={
+                <CheckCircle2 className="h-4 w-4" />
+              }
               accent="green"
               description="Across your workspace"
             />
@@ -376,7 +379,7 @@ export default function DashboardPage() {
             <StatCard
               label="To do"
               value={statistics.todo}
-              icon={<CircleIcon />}
+              icon={<Circle className="h-4 w-4" />}
               accent="blue"
               description="Waiting to be started"
             />
@@ -384,7 +387,7 @@ export default function DashboardPage() {
             <StatCard
               label="In progress"
               value={statistics.inProgress}
-              icon={<ProgressIcon />}
+              icon={<Circle className="h-4 w-4" />}
               accent="orange"
               description="Currently being worked on"
             />
@@ -392,541 +395,284 @@ export default function DashboardPage() {
             <StatCard
               label="Completed"
               value={statistics.completed}
-              icon={<CheckIcon />}
+              icon={<Check className="h-4 w-4" />}
               accent="purple"
               description="Successfully finished"
             />
-
           </section>
 
-          {/* TASK PANEL */}
-
-          <section className="tasks-panel">
-
-            <div className="panel-header">
-
+          {/* Recent tasks */}
+          <section className="mb-7 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.018] shadow-[0_20px_80px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+            <div className="flex flex-col justify-between gap-4 border-b border-white/[0.05] px-5 py-5 sm:flex-row sm:items-center sm:px-6">
               <div>
-                <div className="panel-title-row">
-                  <h2>Recent tasks</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-base font-semibold text-white/90">
+                    Recent tasks
+                  </h2>
 
-                  <span className="task-count">
+                  <span className="rounded-full border border-white/[0.06] bg-white/[0.035] px-2 py-0.5 text-[10px] font-medium text-white/35">
                     {tasks.length}
                   </span>
                 </div>
 
-                <p>
-                  Keep an eye on what's happening
-                  across the workspace.
+                <p className="mt-1.5 text-xs text-white/30">
+                  Keep an eye on what's happening across
+                  the workspace.
                 </p>
               </div>
 
-              <button className="view-all-button">
+              <button className="group flex items-center gap-2 text-xs font-medium text-white/35 transition hover:text-[#39ff14]">
                 View all
-                <ArrowIcon />
-              </button>
 
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </button>
             </div>
 
             {loading ? (
-              <div className="tasks-loading">
-
-                <div className="loading-spinner" />
-
-                <span>
-                  Loading workspace...
-                </span>
-
-              </div>
+              <Loading />
             ) : filteredTasks.length === 0 ? (
-              <div className="empty-tasks">
-                <div className="empty-icon">
-                  <TaskIcon />
-                </div>
-
-                <h3>No tasks found</h3>
-
-                <p>
-                  {search
-                    ? 'Try adjusting your search.'
-                    : 'Your workspace is ready for its first task.'}
-                </p>
-              </div>
+              <EmptyState search={search} />
             ) : (
-              <div className="task-list">
-
-                {filteredTasks.map(
-                  (task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                    />
-                  ),
-                )}
-
-              </div>
+              <div className="divide-y divide-white/[0.045]">
+                {filteredTasks.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  onClick={() => setSelectedTask(task)}
+                />
+              ))}
+            </div>
             )}
-
           </section>
 
-          {/* BOTTOM GRID */}
+          {/* Bottom */}
+          <section className="grid grid-cols-1 gap-5 xl:grid-cols-[1.5fr_1fr]">
+            {/* Workflow */}
+            <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.035] to-white/[0.012] p-6">
+              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-[#39ff14]/10 blur-[70px]" />
 
-          <section className="bottom-dashboard-grid">
-
-            <div className="insight-card">
-
-              <div className="insight-top">
+              <div className="relative flex items-start justify-between">
                 <div>
-                  <span className="insight-label">
+                  <span className="text-[9px] font-semibold tracking-[0.22em] text-[#39ff14]/60">
                     WORKFLOW
                   </span>
 
-                  <h3>
+                  <h3 className="mt-2 text-xl font-semibold leading-tight text-white/90">
                     Your workspace
                     <br />
-                    at a glance
+
+                    <span className="text-white/45">
+                      at a glance
+                    </span>
                   </h3>
                 </div>
 
-                <div className="insight-orb">
-                  <SparkIcon />
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#39ff14]/10 bg-[#39ff14]/[0.06] text-[#39ff14]">
+                  <Sparkles className="h-5 w-5" />
                 </div>
               </div>
 
-              <div className="workflow-bar">
-                <span
-                  style={{
-                    width: `${
-                      statistics.total
-                        ? Math.max(
-                            4,
-                            (statistics.todo /
-                              statistics.total) *
-                              100,
-                          )
-                        : 4
-                    }%`,
-                  }}
-                />
+              <div className="mt-9">
+                <div className="flex h-3 overflow-hidden rounded-full bg-white/[0.04]">
+                  <span
+                    className="bg-[#38bdf8]"
+                    style={{
+                      width: `${percentage(
+                        statistics.todo,
+                        statistics.total,
+                      )}%`,
+                    }}
+                  />
 
-                <span
-                  style={{
-                    width: `${
-                      statistics.total
-                        ? Math.max(
-                            4,
-                            (statistics.inProgress /
-                              statistics.total) *
-                              100,
-                          )
-                        : 4
-                    }%`,
-                  }}
-                />
+                  <span
+                    className="bg-[#f59e0b]"
+                    style={{
+                      width: `${percentage(
+                        statistics.inProgress,
+                        statistics.total,
+                      )}%`,
+                    }}
+                  />
 
-                <span
-                  style={{
-                    width: `${
-                      statistics.total
-                        ? Math.max(
-                            4,
-                            (statistics.completed /
-                              statistics.total) *
-                              100,
-                          )
-                        : 4
-                    }%`,
-                  }}
-                />
+                  <span
+                    className="bg-[#a855f7]"
+                    style={{
+                      width: `${percentage(
+                        statistics.completed,
+                        statistics.total,
+                      )}%`,
+                    }}
+                  />
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3">
+                  <Legend
+                    color="bg-[#38bdf8]"
+                    label="To do"
+                  />
+
+                  <Legend
+                    color="bg-[#f59e0b]"
+                    label="In progress"
+                  />
+
+                  <Legend
+                    color="bg-[#a855f7]"
+                    label="Completed"
+                  />
+                </div>
               </div>
-
-              <div className="workflow-legend">
-                <span>
-                  <i className="legend-todo" />
-                  To do
-                </span>
-
-                <span>
-                  <i className="legend-progress" />
-                  In progress
-                </span>
-
-                <span>
-                  <i className="legend-complete" />
-                  Completed
-                </span>
-              </div>
-
             </div>
 
-            <div className="quick-action-card">
+            {/* Quick action */}
+            <div className="group relative overflow-hidden rounded-2xl border border-[#39ff14]/10 bg-[#39ff14]/[0.035] p-6 transition hover:border-[#39ff14]/20 hover:bg-[#39ff14]/[0.05]">
+              <div className="absolute -bottom-20 -right-20 h-44 w-44 rounded-full bg-[#39ff14]/10 blur-[70px]" />
 
-              <div className="quick-action-icon">
-                <PlusIcon />
-              </div>
+              <div className="relative flex h-full flex-col">
+                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl border border-[#39ff14]/15 bg-[#39ff14]/[0.08] text-[#39ff14]">
+                  <Plus className="h-5 w-5" />
+                </div>
 
-              <div>
-                <span>
+                <span className="text-[9px] font-semibold tracking-[0.2em] text-[#39ff14]/55">
                   QUICK ACTION
                 </span>
 
-                <h3>
+                <h3 className="mt-2 text-lg font-semibold text-white/85">
                   Create a new task
                 </h3>
 
-                <p>
+                <p className="mt-2 max-w-[340px] text-xs leading-5 text-white/30">
                   Turn an idea into an actionable
                   responsibility for your team.
                 </p>
+
+                <button
+                  onClick={() =>
+                    setCreateModalOpen(true)
+                  }
+                  className="mt-auto flex h-10 w-10 items-center justify-center self-end rounded-xl border border-white/[0.06] bg-white/[0.025] text-white/40 transition hover:border-[#39ff14]/20 hover:bg-[#39ff14]/10 hover:text-[#39ff14]"
+                >
+                  <ArrowRight className="h-4 w-4" />
+                </button>
               </div>
-
-              <button>
-                <ArrowIcon />
-              </button>
-
             </div>
-
           </section>
-
         </div>
       </section>
+
+      {/* Create task modal */}
+      <CreateTaskModal
+        open={createModalOpen}
+        onClose={() =>
+          setCreateModalOpen(false)
+        }
+        onCreated={loadTasks}
+      />
+      <TaskDetailsModal
+        task={selectedTask}
+        open={selectedTask !== null}
+        onClose={() => setSelectedTask(null)}
+        onEdit={() => {
+        
+        }}
+/>
     </main>
   );
 }
 
-/* =========================================
-   STAT CARD
-========================================= */
+/* -------------------------------------------------------------------------- */
+/* Small reusable pieces                                                       */
+/* -------------------------------------------------------------------------- */
 
-function StatCard({
+function Background() {
+  return (
+    <div className="pointer-events-none fixed inset-0 overflow-hidden">
+      <div className="absolute -left-32 -top-32 h-[420px] w-[420px] rounded-full bg-[#064e3b]/20 blur-[120px]" />
+
+      <div className="absolute right-[-180px] top-[15%] h-[500px] w-[500px] rounded-full bg-emerald-500/[0.08] blur-[140px]" />
+
+      <div className="absolute bottom-[-220px] left-[30%] h-[500px] w-[500px] rounded-full bg-[#064e3b]/20 blur-[140px]" />
+
+      <div
+        className="absolute inset-0 opacity-[0.035]"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(57,255,20,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(57,255,20,0.35) 1px, transparent 1px)',
+          backgroundSize: '55px 55px',
+        }}
+      />
+    </div>
+  );
+}
+
+function Avatar() {
+  return (
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#39ff14]/20 bg-[#39ff14]/10 text-[10px] font-bold text-[#39ff14]">
+      MP
+    </div>
+  );
+}
+
+function Loading() {
+  return (
+    <div className="flex min-h-[260px] flex-col items-center justify-center gap-4">
+      <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/[0.08] border-t-[#39ff14]" />
+
+      <span className="text-xs text-white/30">
+        Loading workspace...
+      </span>
+    </div>
+  );
+}
+
+function EmptyState({
+  search,
+}: {
+  search: string;
+}) {
+  return (
+    <div className="flex min-h-[260px] flex-col items-center justify-center px-5 text-center">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.025] text-white/25">
+        <CheckCircle2 className="h-5 w-5" />
+      </div>
+
+      <h3 className="text-sm font-semibold text-white/70">
+        No tasks found
+      </h3>
+
+      <p className="mt-1.5 text-xs text-white/30">
+        {search
+          ? 'Try adjusting your search.'
+          : 'Your workspace is ready for its first task.'}
+      </p>
+    </div>
+  );
+}
+
+function Legend({
+  color,
   label,
-  value,
-  icon,
-  accent,
-  description,
 }: {
+  color: string;
   label: string;
-  value: number;
-  icon: React.ReactNode;
-  accent:
-    | 'green'
-    | 'blue'
-    | 'orange'
-    | 'purple';
-  description: string;
 }) {
   return (
-    <div
-      className={`stat-card stat-card-${accent}`}
-    >
-      <div className="stat-card-top">
+    <span className="flex items-center gap-2 text-[10px] text-white/35">
+      <i
+        className={`h-2 w-2 rounded-full ${color}`}
+      />
 
-        <div className="stat-icon">
-          {icon}
-        </div>
-
-        <span className="stat-more">
-          <MoreIcon />
-        </span>
-
-      </div>
-
-      <div className="stat-value">
-        {value}
-      </div>
-
-      <div className="stat-label">
-        {label}
-      </div>
-
-      <div className="stat-description">
-        {description}
-      </div>
-
-    </div>
+      {label}
+    </span>
   );
 }
 
-/* =========================================
-   TASK ROW
-========================================= */
-
-function TaskRow({
-  task,
-}: {
-  task: Task;
-}) {
-  const statusClass =
-    task.status === 'COMPLETED'
-      ? 'status-completed'
-      : task.status === 'IN_PROGRESS'
-        ? 'status-progress'
-        : 'status-todo';
-
-  const priorityClass =
-    task.priority === 'URGENT'
-      ? 'priority-urgent'
-      : task.priority === 'HIGH'
-        ? 'priority-high'
-        : task.priority === 'MEDIUM'
-          ? 'priority-medium'
-          : 'priority-low';
-
-  return (
-    <div className="task-row">
-
-      <div className="task-check">
-        {task.status === 'COMPLETED' ? (
-          <CheckIcon />
-        ) : (
-          <span />
-        )}
-      </div>
-
-      <div className="task-main">
-
-        <h3>{task.title}</h3>
-
-        {task.description && (
-          <p>{task.description}</p>
-        )}
-
-      </div>
-
-      <div className="task-assignee">
-
-        {task.assignedTo ? (
-          <>
-            <div className="assignee-avatar">
-              {getInitials(
-                task.assignedTo.name,
-              )}
-            </div>
-
-            <span>
-              {task.assignedTo.name}
-            </span>
-          </>
-        ) : (
-          <span className="unassigned">
-            Unassigned
-          </span>
-        )}
-
-      </div>
-
-      <span
-        className={`task-status ${statusClass}`}
-      >
-        <i />
-        {formatStatus(task.status)}
-      </span>
-
-      <span
-        className={`task-priority ${priorityClass}`}
-      >
-        {task.priority}
-      </span>
-
-      <div className="task-arrow">
-        <ArrowIcon />
-      </div>
-
-    </div>
-  );
-}
-
-function getInitials(name: string) {
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-}
-
-function formatStatus(
-  status: Task['status'],
+function percentage(
+  value: number,
+  total: number,
 ) {
-  return status
-    .replace('_', ' ')
-    .toLowerCase()
-    .replace(/\b\w/g, (letter) =>
-      letter.toUpperCase(),
-    );
+  if (!total) return 0;
+
+  return (value / total) * 100;
 }
 
-/* =========================================
-   ICONS
-========================================= */
-
-function DashboardIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-      <rect x="14" y="3" width="7" height="7" rx="1.5" />
-      <rect x="3" y="14" width="7" height="7" rx="1.5" />
-      <rect x="14" y="14" width="7" height="7" rx="1.5" />
-    </svg>
-  );
-}
-
-function TaskIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <rect
-        x="4"
-        y="3"
-        width="16"
-        height="18"
-        rx="2"
-      />
-      <path d="M8 8h8M8 12h8M8 16h5" />
-    </svg>
-  );
-}
-
-function UsersIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <circle cx="9" cy="8" r="3" />
-      <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
-      <path d="M16 5.5a3 3 0 0 1 0 5.8M18 14.5a5.8 5.8 0 0 1 3 5.5" />
-    </svg>
-  );
-}
-
-function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <rect
-        x="3"
-        y="5"
-        width="18"
-        height="16"
-        rx="2"
-      />
-      <path d="M16 3v4M8 3v4M3 10h18" />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-2.5V20a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H4v-2.5h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V4h2.5v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v2.5h-.2a1.7 1.7 0 0 0-1.6 1Z" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-4-4" />
-    </svg>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-      <path d="M10 21h4" />
-    </svg>
-  );
-}
-
-function MoreIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <circle cx="5" cy="12" r="1" />
-      <circle cx="12" cy="12" r="1" />
-      <circle cx="19" cy="12" r="1" />
-    </svg>
-  );
-}
-
-function LogoutIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <path d="M10 5H5v14h5" />
-      <path d="M14 8l4 4-4 4M8 12h10" />
-    </svg>
-  );
-}
-
-function ChevronIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <path d="m7 10 5 5 5-5" />
-    </svg>
-  );
-}
-
-function MenuIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <path d="M4 7h16M4 12h16M4 17h16" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  );
-}
-
-function ArrowIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <path d="M5 12h14M13 6l6 6-6 6" />
-    </svg>
-  );
-}
-
-function CircleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="7" />
-    </svg>
-  );
-}
-
-function ProgressIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="8" />
-      <path d="M12 4a8 8 0 0 1 8 8" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <path d="m5 12 4 4L19 6" />
-    </svg>
-  );
-}
-
-function SparkIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <path d="M12 2l1.5 6.5L20 10l-6.5 1.5L12 18l-1.5-6.5L4 10l6.5-1.5L12 2Z" />
-      <path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z" />
-    </svg>
-  );
-}
-
-function AlertIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none">
-      <path d="M12 4 21 20H3L12 4Z" />
-      <path d="M12 9v5M12 17h.01" />
-    </svg>
-  );
-}

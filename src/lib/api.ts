@@ -108,6 +108,41 @@ export async function getTasks(
 }
 
 /* =========================
+   GET USERS
+========================= */
+
+export async function getUsers(
+  accessToken: string,
+): Promise<AssignedUser[]> {
+  const response = await fetch(
+    `${API_URL}/users`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+    },
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      Array.isArray(data.message)
+        ? data.message[0]
+        : data.message ||
+          'Unable to load users.',
+    );
+  }
+
+  return data;
+}
+
+
+
+/* =========================
    CREATE TASK
 ========================= */
 
@@ -116,7 +151,15 @@ export async function createTask(
   task: {
     title: string;
     description?: string;
-    priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+    status?:
+      | 'TODO'
+      | 'IN_PROGRESS'
+      | 'COMPLETED';
+    priority?:
+      | 'LOW'
+      | 'MEDIUM'
+      | 'HIGH'
+      | 'URGENT';
     dueDate?: string;
     assignedToId?: number;
   },
@@ -146,6 +189,8 @@ export async function createTask(
 
   return data;
 }
+
+
 
 /* =========================
    UPDATE TASK
