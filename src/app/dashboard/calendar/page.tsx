@@ -1,10 +1,15 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
 import {
   AlertCircle,
-  ArrowLeft,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -19,9 +24,9 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Users,
   X,
 } from 'lucide-react';
+
 import { useRouter } from 'next/navigation';
 
 import {
@@ -97,7 +102,7 @@ export default function CalendarPage() {
    * --------------------------------------------------
    */
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -159,11 +164,11 @@ export default function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   /*
    * --------------------------------------------------
@@ -226,11 +231,6 @@ export default function CalendarPage() {
       );
     });
   }, [filteredTasks, currentDate]);
-
-  const monthCompleted =
-    monthTasks.filter(
-      (task) => task.status === 'COMPLETED',
-    ).length;
 
   const monthInProgress =
     monthTasks.filter(
@@ -451,7 +451,7 @@ export default function CalendarPage() {
               </h1>
 
               <p className="mt-2 max-w-xl text-sm leading-6 text-white/35">
-                See your team's workload,
+                See your team&apos;s workload,
                 deadlines, and upcoming work
                 at a glance.
               </p>
@@ -660,7 +660,6 @@ export default function CalendarPage() {
         {view === 'agenda' && (
           <AgendaView
             tasks={filteredTasks}
-            currentDate={currentDate}
             onTaskClick={setSelectedTask}
           />
         )}
@@ -758,13 +757,13 @@ function MonthView({
         <div className="overflow-hidden rounded-2xl border border-white/[0.06]">
           <div className="grid grid-cols-7 border-b border-white/[0.06] bg-white/[0.015]">
             {[
-              'Sun',
+              'sun',
               'Mon',
               'Tue',
               'Wed',
               'Thu',
               'Fri',
-              'Sat',
+              'sat',
             ].map((day) => (
               <div
                 key={day}
@@ -1088,11 +1087,9 @@ function WeekView({
 
 function AgendaView({
   tasks,
-  currentDate,
   onTaskClick,
 }: {
   tasks: Task[];
-  currentDate: Date;
   onTaskClick: (task: Task) => void;
 }) {
   const upcoming = tasks
@@ -1505,12 +1502,15 @@ function QuickCreateModal({
                 <option value="LOW">
                   Low
                 </option>
+
                 <option value="MEDIUM">
                   Medium
                 </option>
+
                 <option value="HIGH">
                   High
                 </option>
+
                 <option value="URGENT">
                   Urgent
                 </option>

@@ -10,7 +10,6 @@ import {
   Mail,
   RefreshCw,
   Search,
-  Shield,
   UserCheck,
   UserX,
   Users,

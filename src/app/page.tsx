@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { FormEvent, useMemo, useState } from 'react';
 import { login } from '@/lib/api';
 
@@ -114,9 +115,12 @@ export default function LoginPage() {
       ========================================= */}
 
       <div className="top-brand">
-        <img
+        <Image
           src="/mpuglogo.png"
           alt="MPlug"
+          width={120}
+          height={36}
+          priority
         />
 
         <div className="top-brand-text">
@@ -185,9 +189,12 @@ export default function LoginPage() {
 
               <div className="logo-glow" />
 
-              <img
+              <Image
                 src="/mpuglogo.png"
                 alt="MPlug"
+                width={120}
+                height={36}
+                priority
               />
 
               <div className="card-brand">
@@ -332,7 +339,7 @@ export default function LoginPage() {
                     aria-label={
                       showPassword
                         ? 'Hide password'
-                        : 'Show password'
+                        : 'show password'
                     }
                   >
                     {showPassword ? (
@@ -406,7 +413,7 @@ export default function LoginPage() {
             <div className="login-footer">
 
               <span>
-                Don't have an account?
+                Don &apos;t have an account?
               </span>
 
               <button type="button">

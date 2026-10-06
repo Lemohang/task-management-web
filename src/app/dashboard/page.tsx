@@ -1,6 +1,7 @@
 
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -263,7 +264,7 @@ export default function DashboardPage() {
             <div className="absolute inset-0 rounded-xl bg-[#39ff14]/20 blur-xl" />
 
             <div className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-[#39ff14]/20 bg-white/[0.04]">
-              <img
+              <Image
                 src="/mpuglogo.png"
                 alt="MPlug"
                 className="h-8 w-8 object-contain"
@@ -336,7 +337,7 @@ export default function DashboardPage() {
           SYSTEM
         </div>
 
-        {/* SETTINGS — NOW WORKING */}
+        {/* SETTINGS */}
 
         <Link
           href="/dashboard/settings"
@@ -491,13 +492,13 @@ export default function DashboardPage() {
                 <br />
 
                 <span className="bg-gradient-to-r from-white via-white to-[#39ff14] bg-clip-text text-transparent">
-                  let's get things moving.
+                  lets get things moving.
                 </span>
               </h1>
 
               <p className="mt-4 max-w-[600px] text-sm leading-6 text-white/35 sm:text-[15px]">
                 Stay focused, keep the team aligned,
-                and turn today's responsibilities into
+                and turn today&apos;s responsibilities into
                 meaningful progress.
               </p>
             </div>
@@ -596,7 +597,7 @@ export default function DashboardPage() {
                   </div>
 
                   <p className="mt-1.5 text-xs text-white/30">
-                    Keep an eye on what's happening
+                    Keep an eye on what&apos;s happening
                     across the workspace.
                   </p>
                 </div>

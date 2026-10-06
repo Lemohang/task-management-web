@@ -26,12 +26,16 @@ type SettingsSection =
   | 'about';
 
 type UserProfile = {
+  id?: number;
   name: string;
-  username: string;
   email: string;
   role: string;
   isActive: boolean;
 };
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ??
+  'http://localhost:3001';
 
 const sections = [
   {
@@ -42,7 +46,7 @@ const sections = [
   },
   {
     id: 'security' as SettingsSection,
-    label: 'Security',
+    label: 'security',
     description: 'Password and account security',
     icon: ShieldCheck,
   },
@@ -64,30 +68,64 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] =
     useState<SettingsSection>('profile');
 
-  const [profile, setProfile] = useState<UserProfile>({
-    name: '',
-    username: '',
-    email: '',
-    role: '',
-    isActive: true,
-  });
+  const [profile, setProfile] =
+    useState<UserProfile>({
+      name: '',
+      email: '',
+      role: '',
+      isActive: true,
+    });
 
-  const [notifications, setNotifications] = useState(true);
+  const [notifications, setNotifications] =
+    useState(true);
+
   const [emailNotifications, setEmailNotifications] =
     useState(false);
-  const [compactMode, setCompactMode] = useState(false);
-  const [saved, setSaved] = useState(false);
+
+  const [compactMode, setCompactMode] =
+    useState(false);
+
+  const [saved, setSaved] =
+    useState(false);
+
+  const [savingProfile, setSavingProfile] =
+    useState(false);
+
+  const [profileError, setProfileError] =
+    useState('');
+
+  const [profileSuccess, setProfileSuccess] =
+    useState('');
+
+  const [currentPassword, setCurrentPassword] =
+    useState('');
+
+  const [newPassword, setNewPassword] =
+    useState('');
+
+  const [confirmPassword, setConfirmPassword] =
+    useState('');
+
+  const [changingPassword, setChangingPassword] =
+    useState(false);
+
+  const [passwordError, setPasswordError] =
+    useState('');
+
+  const [passwordSuccess, setPasswordSuccess] =
+    useState('');
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
+    const storedUser =
+      localStorage.getItem('user');
 
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
 
         setProfile({
+          id: user.id,
           name: user.name ?? '',
-          username: user.username ?? '',
           email: user.email ?? '',
           role: user.role ?? '',
           isActive: user.isActive ?? true,
@@ -96,7 +134,226 @@ export default function SettingsPage() {
         // Ignore invalid local storage data.
       }
     }
+
+    const storedSettings =
+      localStorage.getItem('settings');
+
+    if (storedSettings) {
+      try {
+        const settings =
+          JSON.parse(storedSettings);
+
+        setNotifications(
+          settings.notifications ?? true,
+        );
+
+        setEmailNotifications(
+          settings.emailNotifications ?? false,
+        );
+
+        setCompactMode(
+          settings.compactMode ?? false,
+        );
+      } catch {
+        // Ignore invalid settings data.
+      }
+    }
   }, []);
+
+  const handleProfileChange = (
+    field: 'name' | 'email',
+    value: string,
+  ) => {
+    setProfile((current) => ({
+      ...current,
+      [field]: value,
+    }));
+
+    setProfileError('');
+    setProfileSuccess('');
+  };
+
+  const handleSaveProfile = async () => {
+    setProfileError('');
+    setProfileSuccess('');
+    setSavingProfile(true);
+
+    try {
+      const token =
+        localStorage.getItem('accessToken');
+
+      if (!token) {
+        throw new Error(
+          'Your session has expired. Please sign in again.',
+        );
+      }
+
+      const response = await fetch(
+        `${API_URL}/users/me`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: profile.name.trim(),
+            email: profile.email.trim(),
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          Array.isArray(data?.message)
+            ? data.message.join(', ')
+            : data?.message ??
+                'Unable to update your profile.',
+        );
+      }
+
+      const updatedUser = {
+        ...profile,
+        ...data,
+      };
+
+      localStorage.setItem(
+        'user',
+        JSON.stringify(updatedUser),
+      );
+
+      setProfile({
+        id: updatedUser.id,
+        name: updatedUser.name ?? '',
+        email: updatedUser.email ?? '',
+        role: updatedUser.role ?? '',
+        isActive:
+          updatedUser.isActive ?? true,
+      });
+
+      setProfileSuccess(
+        'Your profile has been updated successfully.',
+      );
+    } catch (error) {
+      setProfileError(
+        error instanceof Error
+          ? error.message
+          : 'something went wrong while updating your profile.',
+      );
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (!currentPassword) {
+      setPasswordError(
+        'Please enter your current password.',
+      );
+      return;
+    }
+
+    if (!newPassword) {
+      setPasswordError(
+        'Please enter a new password.',
+      );
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPasswordError(
+        'Your new password must be at least 8 characters long.',
+      );
+      return;
+    }
+
+    if (!confirmPassword) {
+      setPasswordError(
+        'Please confirm your new password.',
+      );
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError(
+        'The new passwords do not match.',
+      );
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setPasswordError(
+        'Your new password must be different from your current password.',
+      );
+      return;
+    }
+
+    try {
+      const token =
+        localStorage.getItem('accessToken');
+
+      if (!token) {
+        throw new Error(
+          'Your session has expired. Please sign in again.',
+        );
+      }
+
+      if (!profile.id) {
+        throw new Error(
+          'Unable to identify your account. Please sign in again.',
+        );
+      }
+
+      setChangingPassword(true);
+
+      const response = await fetch(
+        `${API_URL}/users/${profile.id}/password`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            currentPassword,
+            newPassword,
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          Array.isArray(data?.message)
+            ? data.message.join(', ')
+            : data?.message ??
+                'Unable to change your password.',
+        );
+      }
+
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+
+      setPasswordSuccess(
+        'Your password has been changed successfully.',
+      );
+    } catch (error) {
+      setPasswordError(
+        error instanceof Error
+          ? error.message
+          : 'something went wrong while changing your password.',
+      );
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   const handleSavePreferences = () => {
     localStorage.setItem(
@@ -118,6 +375,7 @@ export default function SettingsPage() {
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
+
     window.location.href = '/';
   };
 
@@ -125,11 +383,11 @@ export default function SettingsPage() {
     <main className="min-h-screen bg-[#020706] text-white">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -left-40 -top-40 h-96 w-96 rounded-full bg-[#39ff14]/5 blur-3xl" />
+
         <div className="absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-emerald-500/5 blur-3xl" />
       </div>
 
       <div className="relative mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
-        {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
             <Link
@@ -152,8 +410,10 @@ export default function SettingsPage() {
                 <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                   Settings
                 </h1>
+
                 <p className="mt-1 text-sm text-white/40">
-                  Manage your account and workspace preferences.
+                  Manage your account and workspace
+                  preferences.
                 </p>
               </div>
             </div>
@@ -161,7 +421,6 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-          {/* Settings Navigation */}
           <aside className="h-fit rounded-3xl border border-white/[0.07] bg-white/[0.025] p-3 shadow-2xl shadow-black/20 backdrop-blur-xl">
             <div className="mb-3 px-3 py-2">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/25">
@@ -208,6 +467,7 @@ export default function SettingsPage() {
                       >
                         {section.label}
                       </p>
+
                       <p className="mt-0.5 truncate text-[11px] text-white/25">
                         {section.description}
                       </p>
@@ -239,6 +499,7 @@ export default function SettingsPage() {
                 <p className="text-sm font-medium text-white/65">
                   Sign out
                 </p>
+
                 <p className="text-[11px] text-white/25">
                   End your current session
                 </p>
@@ -246,35 +507,38 @@ export default function SettingsPage() {
             </button>
           </aside>
 
-          {/* Content */}
           <section className="min-w-0">
-            {/* Profile */}
             {activeSection === 'profile' && (
               <div className="space-y-5">
                 <SettingsHeader
                   icon={UserRound}
                   title="Profile"
-                  description="Your account information and access level."
+                  description="Manage your personal account information."
                 />
 
                 <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-6 shadow-2xl shadow-black/20 backdrop-blur-xl">
-                  <div className="mb-7 flex items-center gap-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[#39ff14]/15 bg-[#39ff14]/5 text-xl font-semibold text-[#39ff14]">
+                  <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[#39ff14]/15 bg-[#39ff14]/5 text-xl font-semibold text-[#39ff14]">
                       {profile.name
-                        ? profile.name.charAt(0).toUpperCase()
+                        ? profile.name
+                            .charAt(0)
+                            .toUpperCase()
                         : 'U'}
                     </div>
 
                     <div>
                       <h2 className="font-semibold text-white">
-                        {profile.name || 'Your account'}
+                        {profile.name ||
+                          'Your account'}
                       </h2>
-                      <p className="text-sm text-white/35">
-                        @{profile.username || 'username'}
+
+                      <p className="mt-1 text-sm text-white/35">
+                        {profile.email ||
+                          'No email address'}
                       </p>
                     </div>
 
-                    <div className="ml-auto">
+                    <div className="sm:ml-auto">
                       <span
                         className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs ${
                           profile.isActive
@@ -289,6 +553,7 @@ export default function SettingsPage() {
                               : 'bg-red-400'
                           }`}
                         />
+
                         {profile.isActive
                           ? 'Active'
                           : 'Inactive'}
@@ -297,27 +562,54 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="grid gap-5 md:grid-cols-2">
-                    <InfoField
-                      label="Full name"
-                      value={profile.name || 'Not available'}
-                    />
+                    <div>
+                      <label
+                        htmlFor="profile-name"
+                        className="mb-2 block text-[11px] font-medium uppercase tracking-[0.14em] text-white/25"
+                      >
+                        Full name
+                      </label>
 
-                    <InfoField
-                      label="Username"
-                      value={
-                        profile.username
-                          ? `@${profile.username}`
-                          : 'Not available'
-                      }
-                    />
+                      <input
+                        id="profile-name"
+                        type="text"
+                        value={profile.name}
+                        onChange={(event) =>
+                          handleProfileChange(
+                            'name',
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Enter your full name"
+                        className="input"
+                      />
+                    </div>
 
-                    <InfoField
-                      label="Email address"
-                      value={
-                        profile.email || 'Not available'
-                      }
-                    />
+                    <div>
+                      <label
+                        htmlFor="profile-email"
+                        className="mb-2 block text-[11px] font-medium uppercase tracking-[0.14em] text-white/25"
+                      >
+                        Email address
+                      </label>
 
+                      <input
+                        id="profile-email"
+                        type="email"
+                        value={profile.email}
+                        onChange={(event) =>
+                          handleProfileChange(
+                            'email',
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Enter your email"
+                        className="input"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-5 md:grid-cols-2">
                     <InfoField
                       label="Role"
                       value={
@@ -329,6 +621,61 @@ export default function SettingsPage() {
                           : 'Not available'
                       }
                     />
+
+                    <InfoField
+                      label="Account status"
+                      value={
+                        profile.isActive
+                          ? 'Active'
+                          : 'Inactive'
+                      }
+                    />
+                  </div>
+
+                  {profileError && (
+                    <AlertBox
+                      type="error"
+                      message={profileError}
+                    />
+                  )}
+
+                  {profileSuccess && (
+                    <AlertBox
+                      type="success"
+                      message={profileSuccess}
+                    />
+                  )}
+
+                  <div className="mt-6 flex flex-col gap-3 border-t border-white/[0.06] pt-6 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-white/80">
+                        Account information
+                      </p>
+
+                      <p className="mt-1 text-xs text-white/30">
+                        Changes are securely saved to your
+                        account.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveProfile}
+                      disabled={savingProfile}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#39ff14] px-5 text-sm font-semibold text-black transition hover:bg-[#50ff31] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingProfile ? (
+                        <>
+                          <Spinner />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save size={16} />
+                          Save changes
+                        </>
+                      )}
+                    </button>
                   </div>
 
                   <div className="mt-6 rounded-2xl border border-white/[0.05] bg-black/10 p-4">
@@ -342,10 +689,12 @@ export default function SettingsPage() {
                         <p className="text-sm font-medium text-white/80">
                           Account access
                         </p>
+
                         <p className="mt-1 text-xs leading-5 text-white/30">
-                          Your access level is controlled by your
-                          assigned role. Contact an administrator
-                          if your permissions need to be changed.
+                          Your access level is controlled by
+                          your assigned role. Contact an
+                          administrator if your permissions
+                          need to be changed.
                         </p>
                       </div>
                     </div>
@@ -354,7 +703,6 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Security */}
             {activeSection === 'security' && (
               <div className="space-y-5">
                 <SettingsHeader
@@ -371,11 +719,12 @@ export default function SettingsPage() {
 
                     <div>
                       <h2 className="font-medium text-white">
-                        Password
+                        Change password
                       </h2>
+
                       <p className="mt-1 text-sm text-white/35">
-                        Change your account password regularly to
-                        keep your account secure.
+                        Update your password to keep your
+                        account secure.
                       </p>
                     </div>
                   </div>
@@ -383,26 +732,97 @@ export default function SettingsPage() {
                   <div className="mt-7 space-y-5">
                     <PasswordField
                       label="Current password"
-                      placeholder="Enter current password"
+                      value={currentPassword}
+                      onChange={setCurrentPassword}
+                      placeholder="Enter your current password"
                     />
 
-                    <PasswordField
-                      label="New password"
-                      placeholder="Enter new password"
-                    />
+                    <div>
+                      <PasswordField
+                        label="New password"
+                        value={newPassword}
+                        onChange={setNewPassword}
+                        placeholder="Enter your new password"
+                      />
 
-                    <PasswordField
-                      label="Confirm new password"
-                      placeholder="Confirm new password"
-                    />
+                      {newPassword && (
+                        <PasswordStrength
+                          password={newPassword}
+                        />
+                      )}
+                    </div>
 
-                    <button
-                      type="button"
-                      className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#39ff14] px-5 text-sm font-semibold text-black transition hover:bg-[#50ff31] active:scale-[0.98]"
-                    >
-                      <LockKeyhole size={16} />
-                      Update password
-                    </button>
+                    <div>
+                      <PasswordField
+                        label="Confirm new password"
+                        value={confirmPassword}
+                        onChange={setConfirmPassword}
+                        placeholder="Confirm your new password"
+                      />
+
+                      {confirmPassword &&
+                        newPassword !==
+                          confirmPassword && (
+                          <p className="mt-2 text-xs text-red-300">
+                            Passwords do not match.
+                          </p>
+                        )}
+
+                      {confirmPassword &&
+                        newPassword ===
+                          confirmPassword && (
+                          <p className="mt-2 flex items-center gap-1.5 text-xs text-[#39ff14]/80">
+                            <Check size={13} />
+                            Passwords match.
+                          </p>
+                        )}
+                    </div>
+
+                    {passwordError && (
+                      <AlertBox
+                        type="error"
+                        message={passwordError}
+                      />
+                    )}
+
+                    {passwordSuccess && (
+                      <AlertBox
+                        type="success"
+                        message={passwordSuccess}
+                      />
+                    )}
+
+                    <div className="flex flex-col gap-3 border-t border-white/[0.06] pt-6 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-white/70">
+                          Password requirements
+                        </p>
+
+                        <p className="mt-1 text-xs text-white/30">
+                          Minimum 8 characters. Use a strong,
+                          unique password.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleChangePassword}
+                        disabled={changingPassword}
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#39ff14] px-5 text-sm font-semibold text-black transition hover:bg-[#50ff31] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {changingPassword ? (
+                          <>
+                            <Spinner />
+                            Updating...
+                          </>
+                        ) : (
+                          <>
+                            <LockKeyhole size={16} />
+                            Update password
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -417,10 +837,12 @@ export default function SettingsPage() {
                       <h3 className="text-sm font-medium text-white/80">
                         Security recommendation
                       </h3>
+
                       <p className="mt-1 text-sm leading-6 text-white/30">
-                        Use a strong password containing uppercase
-                        letters, lowercase letters, numbers and
-                        special characters.
+                        Use a strong password containing
+                        uppercase letters, lowercase letters,
+                        numbers and special characters. Avoid
+                        reusing passwords from other services.
                       </p>
                     </div>
                   </div>
@@ -428,7 +850,6 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Preferences */}
             {activeSection === 'preferences' && (
               <div className="space-y-5">
                 <SettingsHeader
@@ -444,7 +865,9 @@ export default function SettingsPage() {
                     description="Receive notifications about task activity."
                     enabled={notifications}
                     onToggle={() =>
-                      setNotifications(!notifications)
+                      setNotifications(
+                        !notifications,
+                      )
                     }
                   />
 
@@ -466,26 +889,29 @@ export default function SettingsPage() {
                     description="Use a denser layout to display more information."
                     enabled={compactMode}
                     onToggle={() =>
-                      setCompactMode(!compactMode)
+                      setCompactMode(
+                        !compactMode,
+                      )
                     }
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-3xl border border-white/[0.07] bg-white/[0.025] p-5">
+                <div className="flex flex-col gap-4 rounded-3xl border border-white/[0.07] bg-white/[0.025] p-5 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm font-medium text-white">
                       Save preferences
                     </p>
+
                     <p className="mt-1 text-xs text-white/30">
-                      Your preferences are stored locally on this
-                      device.
+                      Your preferences are stored locally on
+                      this device.
                     </p>
                   </div>
 
                   <button
                     type="button"
                     onClick={handleSavePreferences}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#39ff14] px-4 text-sm font-semibold text-black transition hover:bg-[#50ff31]"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#39ff14] px-4 text-sm font-semibold text-black transition hover:bg-[#50ff31]"
                   >
                     {saved ? (
                       <>
@@ -503,7 +929,6 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* About */}
             {activeSection === 'about' && (
               <div className="space-y-5">
                 <SettingsHeader
@@ -523,6 +948,7 @@ export default function SettingsPage() {
                         <h2 className="text-xl font-semibold">
                           MPlug Task Management
                         </h2>
+
                         <p className="mt-1 text-sm text-white/35">
                           Team productivity and task management
                           workspace.
@@ -575,10 +1001,11 @@ export default function SettingsPage() {
                       <h3 className="text-sm font-medium text-white">
                         Built by MPlug
                       </h3>
+
                       <p className="mt-1 text-sm leading-6 text-white/30">
-                        A clean, modern workspace designed to help
-                        teams organize responsibilities, track
-                        progress and stay focused.
+                        A clean, modern workspace designed to
+                        help teams organize responsibilities,
+                        track progress and stay focused.
                       </p>
                     </div>
                   </div>
@@ -608,6 +1035,7 @@ function SettingsHeader({
           size={19}
           className="text-[#39ff14]"
         />
+
         <h2 className="text-lg font-semibold text-white">
           {title}
         </h2>
@@ -642,9 +1070,13 @@ function InfoField({
 
 function PasswordField({
   label,
+  value,
+  onChange,
   placeholder,
 }: {
   label: string;
+  value: string;
+  onChange: (value: string) => void;
   placeholder: string;
 }) {
   return (
@@ -655,10 +1087,169 @@ function PasswordField({
 
       <input
         type="password"
+        value={value}
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
         placeholder={placeholder}
+        autoComplete="new-password"
         className="input"
       />
     </div>
+  );
+}
+
+function PasswordStrength({
+  password,
+}: {
+  password: string;
+}) {
+  const checks = {
+    length: password.length >= 8,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    number: /[0-9]/.test(password),
+    special: /[^A-Za-z0-9]/.test(password),
+  };
+
+  const score = Object.values(checks).filter(
+    Boolean,
+  ).length;
+
+  const label =
+    score <= 2
+      ? 'Weak'
+      : score === 3
+        ? 'Fair'
+        : score === 4
+          ? 'strong'
+          : 'Very strong';
+
+  return (
+    <div className="mt-3 rounded-2xl border border-white/[0.05] bg-black/10 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[11px] uppercase tracking-[0.14em] text-white/25">
+          Password strength
+        </span>
+
+        <span
+          className={`text-xs ${
+            score <= 2
+              ? 'text-red-300'
+              : score === 3
+                ? 'text-yellow-300'
+                : 'text-[#39ff14]'
+          }`}
+        >
+          {label}
+        </span>
+      </div>
+
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((level) => (
+          <div
+            key={level}
+            className={`h-1 flex-1 rounded-full transition ${
+              level <= score
+                ? 'bg-[#39ff14]'
+                : 'bg-white/[0.07]'
+            }`}
+          />
+        ))}
+      </div>
+
+      <div className="mt-3 grid gap-1.5 text-[11px] sm:grid-cols-2">
+        <PasswordCheck
+          valid={checks.length}
+          label="At least 8 characters"
+        />
+
+        <PasswordCheck
+          valid={checks.uppercase}
+          label="Uppercase letter"
+        />
+
+        <PasswordCheck
+          valid={checks.lowercase}
+          label="Lowercase letter"
+        />
+
+        <PasswordCheck
+          valid={checks.number}
+          label="Number"
+        />
+
+        <PasswordCheck
+          valid={checks.special}
+          label="Special character"
+        />
+      </div>
+    </div>
+  );
+}
+
+function PasswordCheck({
+  valid,
+  label,
+}: {
+  valid: boolean;
+  label: string;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2 ${
+        valid ? 'text-[#39ff14]/80' : 'text-white/25'
+      }`}
+    >
+      <span
+        className={`flex h-4 w-4 items-center justify-center rounded-full ${
+          valid
+            ? 'bg-[#39ff14]/10'
+            : 'bg-white/[0.04]'
+        }`}
+      >
+        {valid && <Check size={10} />}
+      </span>
+
+      {label}
+    </div>
+  );
+}
+
+function AlertBox({
+  type,
+  message,
+}: {
+  type: 'error' | 'success';
+  message: string;
+}) {
+  if (type === 'success') {
+    return (
+      <div className="mt-5 flex items-center gap-3 rounded-2xl border border-[#39ff14]/10 bg-[#39ff14]/[0.04] px-4 py-3">
+        <Check
+          size={17}
+          className="shrink-0 text-[#39ff14]"
+        />
+
+        <p className="text-sm text-[#39ff14]/80">
+          {message}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 rounded-2xl border border-red-400/10 bg-red-400/[0.04] px-4 py-3">
+      <p className="text-sm text-red-300">
+        {message}
+      </p>
+    </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <span className="h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black" />
   );
 }
 

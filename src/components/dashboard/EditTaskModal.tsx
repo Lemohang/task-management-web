@@ -4,7 +4,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import {
   Calendar,
-  Check,
   Loader2,
   Save,
   User,

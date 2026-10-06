@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -11,7 +11,6 @@ import {
   Mail,
   RefreshCw,
   Search,
-  Shield,
   Target,
   UserCheck,
   UserX,
@@ -31,7 +30,6 @@ import DeleteTaskModal from '@/components/dashboard/DeleteTaskModal';
 
 export default function TeamMemberPage() {
   const params = useParams();
-  const router = useRouter();
 
   const memberId = Number(params.id);
 

@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -35,18 +36,55 @@ export default function LoginForm() {
         password,
       );
 
+      /*
+       * The backend now returns:
+       *
+       * {
+       *   accessToken,
+       *   user: {
+       *     id,
+       *     name,
+       *     email,
+       *     role,
+       *     isActive,
+       *     ...
+       *   }
+       * }
+       */
+
+      if (!data.accessToken) {
+        throw new Error(
+          'Login succeeded, but no access token was returned.',
+        );
+      }
+
+      if (!data.user?.id) {
+        throw new Error(
+          'Login succeeded, but your account information was not returned.',
+        );
+      }
+
+      // Store authentication token.
       localStorage.setItem(
         'accessToken',
         data.accessToken,
       );
 
+      // Store the authenticated user's
+      // complete safe profile.
+      localStorage.setItem(
+        'user',
+        JSON.stringify(data.user),
+      );
+
+      // Go to dashboard.
       window.location.href =
         '/dashboard';
     } catch (error) {
       setError(
         error instanceof Error
           ? error.message
-          : 'Something went wrong.',
+          : 'something went wrong.',
       );
     } finally {
       setLoading(false);
@@ -170,7 +208,7 @@ export default function LoginForm() {
           >
             {showPassword
               ? 'Hide'
-              : 'Show'}
+              : 'show'}
           </button>
         </div>
       </div>
