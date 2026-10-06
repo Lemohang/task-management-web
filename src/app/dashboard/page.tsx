@@ -266,6 +266,8 @@ export default function DashboardPage() {
             <div className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-[#39ff14]/20 bg-white/[0.04]">
               <Image
                 src="/mpuglogo.png"
+                width={32}
+                height={32}
                 alt="MPlug"
                 className="h-8 w-8 object-contain"
               />
