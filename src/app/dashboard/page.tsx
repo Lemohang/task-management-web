@@ -1,6 +1,8 @@
 
 'use client';
 
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   useCallback,
   useEffect,
@@ -46,18 +48,22 @@ import TaskFilters from '@/components/dashboard/TaskFilters';
 const navItems = [
   {
     label: 'Dashboard',
+    href: '/dashboard',
     icon: LayoutDashboard,
   },
   {
     label: 'My Tasks',
+    href: '/dashboard/my-tasks',
     icon: CheckCircle2,
   },
   {
     label: 'Team',
+    href: '/dashboard/team',
     icon: Users,
   },
   {
     label: 'Calendar',
+    href: '/dashboard/calendar',
     icon: Calendar,
   },
 ];
@@ -97,6 +103,8 @@ export default function DashboardPage() {
 
   const [deleteTaskItem, setDeleteTaskItem] =
     useState<Task | null>(null);
+
+  const pathname = usePathname();
 
   /* =========================
      LOAD TASKS
@@ -179,8 +187,7 @@ export default function DashboardPage() {
       total: tasks.length,
 
       todo: tasks.filter(
-        (task) =>
-          task.status === 'TODO',
+        (task) => task.status === 'TODO',
       ).length,
 
       inProgress: tasks.filter(
@@ -282,14 +289,19 @@ export default function DashboardPage() {
         </div>
 
         <nav className="space-y-1">
-          {navItems.map((item, index) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
-            const active = index === 0;
+
+            const active =
+              pathname === item.href;
 
             return (
-              <button
+              <Link
                 key={item.label}
-                type="button"
+                href={item.href}
+                onClick={() =>
+                  setSidebarOpen(false)
+                }
                 className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-all ${
                   active
                     ? 'border border-[#39ff14]/10 bg-[#39ff14]/[0.08] text-white'
@@ -313,7 +325,7 @@ export default function DashboardPage() {
                 {active && (
                   <span className="absolute right-3 h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_10px_rgba(57,255,20,0.9)]" />
                 )}
-              </button>
+              </Link>
             );
           })}
         </nav>
@@ -324,16 +336,37 @@ export default function DashboardPage() {
           SYSTEM
         </div>
 
-        <button
-          type="button"
-          className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/45 transition hover:bg-white/[0.035] hover:text-white"
+        {/* SETTINGS — NOW WORKING */}
+
+        <Link
+          href="/dashboard/settings"
+          onClick={() =>
+            setSidebarOpen(false)
+          }
+          className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-all ${
+            pathname === '/dashboard/settings'
+              ? 'border border-[#39ff14]/10 bg-[#39ff14]/[0.08] text-white'
+              : 'text-white/45 hover:bg-white/[0.035] hover:text-white'
+          }`}
         >
-          <Settings className="h-4 w-4 text-white/40 group-hover:text-white/70" />
+          <span
+            className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+              pathname === '/dashboard/settings'
+                ? 'bg-[#39ff14]/10 text-[#39ff14]'
+                : 'text-white/40 group-hover:text-white/70'
+            }`}
+          >
+            <Settings className="h-4 w-4" />
+          </span>
 
           <span className="font-medium">
             Settings
           </span>
-        </button>
+
+          {pathname === '/dashboard/settings' && (
+            <span className="absolute right-3 h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_10px_rgba(57,255,20,0.9)]" />
+          )}
+        </Link>
 
         {/* Bottom */}
 
@@ -372,6 +405,8 @@ export default function DashboardPage() {
         {/* TOP BAR */}
 
         <header className="sticky top-0 z-30 flex h-[76px] items-center gap-4 border-b border-white/[0.05] bg-[#010705]/75 px-5 backdrop-blur-2xl sm:px-8 lg:px-10">
+          {/* Mobile menu */}
+
           <button
             type="button"
             onClick={() =>
@@ -566,14 +601,14 @@ export default function DashboardPage() {
                   </p>
                 </div>
 
-                <button
-                  type="button"
+                <Link
+                  href="/dashboard/my-tasks"
                   className="group flex items-center gap-2 text-xs font-medium text-white/35 transition hover:text-[#39ff14]"
                 >
                   View all
 
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                </button>
+                </Link>
               </div>
 
               {/* FILTERS */}
@@ -765,33 +800,34 @@ export default function DashboardPage() {
       {/* DELETE */}
 
       <DeleteTaskModal
-          task={deleteTaskItem}
-          open={!!deleteTaskItem}
-          onClose={() => setDeleteTaskItem(null)}
-          onDeleted={() => {
-            setDeleteTaskItem(null);
-            loadTasks();
-          }}
-        />
+        task={deleteTaskItem}
+        open={!!deleteTaskItem}
+        onClose={() =>
+          setDeleteTaskItem(null)
+        }
+        onDeleted={() => {
+          setDeleteTaskItem(null);
+          loadTasks();
+        }}
+      />
+
       {/* EDIT */}
 
       <EditTaskModal
-      task={editTask}
-      open={!!editTask}
-      onClose={() => setEditTask(null)}
-      onUpdated={() => {
-        setEditTask(null);
-        loadTasks();
-      }}
-    />
+        task={editTask}
+        open={!!editTask}
+        onClose={() => setEditTask(null)}
+        onUpdated={() => {
+          setEditTask(null);
+          loadTasks();
+        }}
+      />
     </main>
   );
 }
 
 /* ==========================================================================
-
    BACKGROUND
-
 ========================================================================== */
 
 function Background() {
@@ -816,9 +852,7 @@ function Background() {
 }
 
 /* ==========================================================================
-
    AVATAR
-
 ========================================================================== */
 
 function Avatar() {
@@ -830,9 +864,7 @@ function Avatar() {
 }
 
 /* ==========================================================================
-
    LOADING
-
 ========================================================================== */
 
 function Loading() {
@@ -848,9 +880,7 @@ function Loading() {
 }
 
 /* ==========================================================================
-
    EMPTY STATE
-
 ========================================================================== */
 
 function EmptyState({
@@ -882,9 +912,7 @@ function EmptyState({
 }
 
 /* ==========================================================================
-
    LEGEND
-
 ========================================================================== */
 
 function Legend({
@@ -906,9 +934,7 @@ function Legend({
 }
 
 /* ==========================================================================
-
    ACTIVE FILTER CHECK
-
 ========================================================================== */
 
 function hasActiveFilters(
@@ -924,9 +950,7 @@ function hasActiveFilters(
 }
 
 /* ==========================================================================
-
    PERCENTAGE
-
 ========================================================================== */
 
 function percentage(
@@ -937,4 +961,3 @@ function percentage(
 
   return (value / total) * 100;
 }
-

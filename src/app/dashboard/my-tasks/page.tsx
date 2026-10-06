@@ -1,7 +1,13 @@
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
 import {
   ArrowLeft,
   CheckCircle2,
@@ -11,6 +17,7 @@ import {
   Search,
   Sparkles,
 } from 'lucide-react';
+
 import Link from 'next/link';
 
 import {
@@ -65,13 +72,41 @@ export default function MyTasksPage() {
         filters,
       );
 
-      setTasks(response.data);
+      /*
+       * Protect the page from an unexpected API response.
+       * We only allow an actual array into the tasks state.
+       */
+      const responseData = response as unknown;
+
+      let taskList: Task[] = [];
+
+      if (Array.isArray(responseData)) {
+        taskList = responseData;
+      } else if (
+        responseData &&
+        typeof responseData === 'object'
+      ) {
+        const result = responseData as {
+          data?: unknown;
+          tasks?: unknown;
+        };
+
+        if (Array.isArray(result.data)) {
+          taskList = result.data as Task[];
+        } else if (Array.isArray(result.tasks)) {
+          taskList = result.tasks as Task[];
+        }
+      }
+
+      setTasks(taskList);
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
           : 'Unable to load your tasks.',
       );
+
+      setTasks([]);
     } finally {
       setLoading(false);
     }
@@ -97,7 +132,10 @@ export default function MyTasksPage() {
     ).length;
 
     const overdue = tasks.filter((task) => {
-      if (!task.dueDate || task.status === 'COMPLETED') {
+      if (
+        !task.dueDate ||
+        task.status === 'COMPLETED'
+      ) {
         return false;
       }
 
@@ -129,11 +167,11 @@ export default function MyTasksPage() {
       {/* Background */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -left-40 -top-40 h-96 w-96 rounded-full bg-emerald-500/10 blur-[120px]" />
+
         <div className="absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-green-400/10 blur-[120px]" />
       </div>
 
       <div className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-
         {/* Header */}
         <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -170,6 +208,7 @@ export default function MyTasksPage() {
               size={15}
               className="text-emerald-400"
             />
+
             Personal workspace
           </div>
         </div>
@@ -216,10 +255,9 @@ export default function MyTasksPage() {
           />
         </div>
 
-        {/* Content */}
+        {/* Tasks */}
         <section className="overflow-hidden rounded-3xl border border-white/[0.07] bg-white/[0.025] shadow-2xl shadow-black/20 backdrop-blur-xl">
-
-          {/* Section header */}
+          {/* Section Header */}
           <div className="flex flex-col gap-3 border-b border-white/[0.06] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div>
               <h2 className="font-semibold">
@@ -282,97 +320,106 @@ export default function MyTasksPage() {
           )}
 
           {/* Empty */}
-          {!loading && !error && tasks.length === 0 && (
-            <div className="flex min-h-72 flex-col items-center justify-center px-6 text-center">
-              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-400/10 bg-emerald-400/5">
-                <Search
-                  size={26}
-                  className="text-emerald-400/70"
-                />
+          {!loading &&
+            !error &&
+            tasks.length === 0 && (
+              <div className="flex min-h-72 flex-col items-center justify-center px-6 text-center">
+                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-400/10 bg-emerald-400/5">
+                  <Search
+                    size={26}
+                    className="text-emerald-400/70"
+                  />
+                </div>
+
+                <h3 className="text-lg font-medium">
+                  {hasActiveFilters
+                    ? 'No matching tasks'
+                    : 'No tasks assigned to you'}
+                </h3>
+
+                <p className="mt-2 max-w-md text-sm text-white/40">
+                  {hasActiveFilters
+                    ? 'Try changing your filters or clearing them.'
+                    : 'Tasks assigned to you will appear here.'}
+                </p>
+
+                {hasActiveFilters && (
+                  <button
+                    onClick={resetFilters}
+                    className="mt-5 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-black transition hover:bg-emerald-400"
+                  >
+                    Clear filters
+                  </button>
+                )}
               </div>
+            )}
 
-              <h3 className="text-lg font-medium">
-                {hasActiveFilters
-                  ? 'No matching tasks'
-                  : 'No tasks assigned to you'}
-              </h3>
-
-              <p className="mt-2 max-w-md text-sm text-white/40">
-                {hasActiveFilters
-                  ? 'Try changing your filters or clearing them.'
-                  : 'Tasks assigned to you will appear here.'}
-              </p>
-
-              {hasActiveFilters && (
-                <button
-                  onClick={resetFilters}
-                  className="mt-5 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-black transition hover:bg-emerald-400"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Tasks */}
-          {!loading && !error && tasks.length > 0 && (
-            <div className="divide-y divide-white/[0.05]">
-              {tasks.map((task) => (
-                <TaskRow
+          {/* Task List */}
+          {!loading &&
+            !error &&
+            tasks.length > 0 && (
+              <div className="divide-y divide-white/[0.05]">
+                {tasks.map((task) => (
+                  <TaskRow
                     key={task.id}
                     task={task}
-                    onClick={() => setSelectedTask(task)}
+                    onClick={() =>
+                      setSelectedTask(task)
+                    }
                     onUpdated={loadTasks}
-                    />
-              ))}
-            </div>
-          )}
+                  />
+                ))}
+              </div>
+            )}
         </section>
       </div>
 
-      {/* Details Modal */}
-      ```tsx
-{/* Task Details Modal */}
-<TaskDetailsModal
-  task={selectedTask}
-  open={!!selectedTask}
-  onClose={() => setSelectedTask(null)}
-  onEdit={() => {
-    if (!selectedTask) return;
+      {/* Task Details Modal */}
+      <TaskDetailsModal
+        task={selectedTask}
+        open={!!selectedTask}
+        onClose={() =>
+          setSelectedTask(null)
+        }
+        onEdit={() => {
+          if (!selectedTask) return;
 
-    setEditTask(selectedTask);
-    setSelectedTask(null);
-  }}
-  onDelete={() => {
-    if (!selectedTask) return;
+          setEditTask(selectedTask);
+          setSelectedTask(null);
+        }}
+        onDelete={() => {
+          if (!selectedTask) return;
 
-    setDeleteTaskItem(selectedTask);
-    setSelectedTask(null);
-  }}
-/>
+          setDeleteTaskItem(selectedTask);
+          setSelectedTask(null);
+        }}
+      />
 
-{/* Edit Task Modal */}
-<EditTaskModal
-  task={editTask}
-  open={!!editTask}
-  onClose={() => setEditTask(null)}
-  onUpdated={() => {
-    setEditTask(null);
-    loadTasks();
-  }}
-/>
+      {/* Edit Task Modal */}
+      <EditTaskModal
+        task={editTask}
+        open={!!editTask}
+        onClose={() =>
+          setEditTask(null)
+        }
+        onUpdated={() => {
+          setEditTask(null);
+          loadTasks();
+        }}
+      />
 
-{/* Delete Task Modal */}
-<DeleteTaskModal
-  task={deleteTaskItem}
-  open={!!deleteTaskItem}
-  onClose={() => setDeleteTaskItem(null)}
-  onDeleted={() => {
-    setDeleteTaskItem(null);
-    loadTasks();
-  }}
-/>
-
+      {/* Delete Task Modal */}
+      <DeleteTaskModal
+        task={deleteTaskItem}
+        open={!!deleteTaskItem}
+        onClose={() =>
+          setDeleteTaskItem(null)
+        }
+        onDeleted={() => {
+          setDeleteTaskItem(null);
+          loadTasks();
+        }}
+      />
     </main>
   );
 }
@@ -394,6 +441,7 @@ function Stat({
     <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4 backdrop-blur-xl">
       <div className="mb-3 flex items-center gap-2 text-white/40">
         {icon}
+
         <span className="text-xs">
           {label}
         </span>
@@ -405,4 +453,3 @@ function Stat({
     </div>
   );
 }
-
