@@ -12,7 +12,6 @@ import {
 
 import {
   Activity,
-  Check,
   CheckCircle2,
   Crown,
   Eye,
