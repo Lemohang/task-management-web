@@ -64,7 +64,12 @@ export default function TeamMemberPage() {
 
 
 
-  const memberId = Number(params.id);
+ const rawId = params.id;
+const memberId = Number(
+  Array.isArray(rawId) ? rawId[0] : rawId,
+);
+const validMemberId =
+  Number.isInteger(memberId) && memberId > 0;
 
 
 
@@ -290,16 +295,14 @@ export default function TeamMemberPage() {
 
 
 
-  useEffect(() => {
-
-    if (!Number.isNaN(memberId)) {
-
-      loadMember();
-
-    }
-
-  }, [memberId, loadMember]);
-
+ useEffect(() => {
+  if (validMemberId) {
+    loadMember();
+  } else {
+    setError('Invalid team member ID.');
+    setLoading(false);
+  }
+}, [validMemberId, loadMember]);
 
 
   const filteredTasks = useMemo(() => {
