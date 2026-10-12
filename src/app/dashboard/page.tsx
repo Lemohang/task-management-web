@@ -17,8 +17,10 @@ import {
   Bell,
   Calendar,
   Check,
+  CheckCheck,
   CheckCircle2,
   Circle,
+  Clock3,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -27,7 +29,9 @@ import {
   Search,
   Settings,
   Sparkles,
+  Trash2,
   Users,
+  X,
 } from 'lucide-react';
 
 import {
@@ -69,6 +73,26 @@ const navItems = [
   },
 ];
 
+type WorkspaceSettings = {
+  notifications: boolean;
+  emailNotifications: boolean;
+  compactMode: boolean;
+};
+
+const DEFAULT_SETTINGS: WorkspaceSettings = {
+  notifications: true,
+  emailNotifications: false,
+  compactMode: false,
+};
+
+type DashboardNotification = {
+  id: string;
+  type: 'overdue' | 'urgent';
+  title: string;
+  message: string;
+  taskId: number | string;
+};
+
 export default function DashboardPage() {
   /* =========================
      TASK STATE
@@ -105,7 +129,197 @@ export default function DashboardPage() {
   const [deleteTaskItem, setDeleteTaskItem] =
     useState<Task | null>(null);
 
+  const [compactMode, setCompactMode] =
+    useState(false);
+
+  const [
+    notificationsEnabled,
+    setNotificationsEnabled,
+  ] = useState(
+    DEFAULT_SETTINGS.notifications,
+  );
+
+  const [
+    notificationsOpen,
+    setNotificationsOpen,
+  ] = useState(false);
+
+  const [readNotificationIds, setReadNotificationIds] =
+    useState<string[]>([]);
+
+  const [
+    dismissedNotificationIds,
+    setDismissedNotificationIds,
+  ] = useState<string[]>([]);
+
+  const [greeting, setGreeting] =
+    useState('Good morning');
+
+  const [currentTime, setCurrentTime] =
+    useState(0);
+
   const pathname = usePathname();
+
+  /* =========================
+     LOAD SETTINGS
+  ========================= */
+
+  useEffect(() => {
+    const loadSettings = () => {
+      try {
+        const stored =
+          localStorage.getItem('settings');
+
+        if (!stored) {
+          setCompactMode(
+            DEFAULT_SETTINGS.compactMode,
+          );
+
+          setNotificationsEnabled(
+            DEFAULT_SETTINGS.notifications,
+          );
+
+          return;
+        }
+
+        const parsed =
+          JSON.parse(
+            stored,
+          ) as Partial<WorkspaceSettings>;
+
+        setCompactMode(
+          parsed.compactMode ??
+            DEFAULT_SETTINGS.compactMode,
+        );
+
+        setNotificationsEnabled(
+          parsed.notifications ??
+            DEFAULT_SETTINGS.notifications,
+        );
+      } catch {
+        setCompactMode(
+          DEFAULT_SETTINGS.compactMode,
+        );
+
+        setNotificationsEnabled(
+          DEFAULT_SETTINGS.notifications,
+        );
+      }
+    };
+
+    loadSettings();
+
+    const handleStorageChange = () => {
+      loadSettings();
+    };
+
+    window.addEventListener(
+      'storage',
+      handleStorageChange,
+    );
+
+    window.addEventListener(
+      'settingsChanged',
+      handleStorageChange,
+    );
+
+    return () => {
+      window.removeEventListener(
+        'storage',
+        handleStorageChange,
+      );
+
+      window.removeEventListener(
+        'settingsChanged',
+        handleStorageChange,
+      );
+    };
+  }, []);
+
+  /* =========================
+     LOAD NOTIFICATION STATE
+  ========================= */
+
+  useEffect(() => {
+    try {
+      const storedRead =
+        localStorage.getItem(
+          'notificationRead',
+        );
+
+      if (storedRead) {
+        const parsed =
+          JSON.parse(storedRead);
+
+        if (Array.isArray(parsed)) {
+          setReadNotificationIds(
+            parsed.filter(
+              (item): item is string =>
+                typeof item === 'string',
+            ),
+          );
+        }
+      }
+
+      const storedDismissed =
+        localStorage.getItem(
+          'notificationDismissed',
+        );
+
+      if (storedDismissed) {
+        const parsed =
+          JSON.parse(storedDismissed);
+
+        if (Array.isArray(parsed)) {
+          setDismissedNotificationIds(
+            parsed.filter(
+              (item): item is string =>
+                typeof item === 'string',
+            ),
+          );
+        }
+      }
+    } catch {
+      setReadNotificationIds([]);
+      setDismissedNotificationIds([]);
+    }
+  }, []);
+
+  /* =========================
+     TIME-BASED GREETING
+  ========================= */
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const hour = now.getHours();
+
+      setCurrentTime(now.getTime());
+
+      if (hour >= 5 && hour < 12) {
+        setGreeting('Good morning');
+      } else if (
+        hour >= 12 &&
+        hour < 18
+      ) {
+        setGreeting('Good afternoon');
+      } else {
+        setGreeting('Good evening');
+      }
+    };
+
+    updateTime();
+
+    const interval =
+      window.setInterval(
+        updateTime,
+        60 * 1000,
+      );
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, []);
 
   /* =========================
      LOAD TASKS
@@ -180,6 +394,182 @@ export default function DashboardPage() {
   }, [loadTasks]);
 
   /* =========================
+     NOTIFICATIONS
+  ========================= */
+
+  const notifications = useMemo<
+    DashboardNotification[]
+  >(() => {
+    if (!notificationsEnabled) {
+      return [];
+    }
+
+    if (!currentTime) {
+      return [];
+    }
+
+    const now = new Date(currentTime);
+
+    const generated: DashboardNotification[] =
+      [];
+
+    tasks.forEach((task) => {
+      const taskStatus =
+        String(task.status).toUpperCase();
+
+      const taskPriority =
+        String(task.priority).toUpperCase();
+
+      /* OVERDUE */
+
+      if (
+        task.dueDate &&
+        taskStatus !== 'COMPLETED'
+      ) {
+        const dueDate = new Date(
+          task.dueDate,
+        );
+
+        if (
+          !Number.isNaN(
+            dueDate.getTime(),
+          ) &&
+          dueDate.getTime() < now.getTime()
+        ) {
+          generated.push({
+            id: `overdue-${task.id}`,
+            type: 'overdue',
+            title: 'Task overdue',
+            message: `"${task.title}" is past its due date.`,
+            taskId: task.id,
+          });
+        }
+      }
+
+      /* URGENT */
+
+      if (
+        taskPriority === 'URGENT' &&
+        taskStatus !== 'COMPLETED'
+      ) {
+        generated.push({
+          id: `urgent-${task.id}`,
+          type: 'urgent',
+          title: 'Urgent task',
+          message: `"${task.title}" needs your attention.`,
+          taskId: task.id,
+        });
+      }
+    });
+
+    return generated
+      .filter(
+        (notification) =>
+          !dismissedNotificationIds.includes(
+            notification.id,
+          ),
+      )
+      .slice(0, 8);
+  }, [
+    tasks,
+    notificationsEnabled,
+    dismissedNotificationIds,
+    currentTime,
+  ]);
+
+  const unreadNotifications = useMemo(
+    () =>
+      notifications.filter(
+        (notification) =>
+          !readNotificationIds.includes(
+            notification.id,
+          ),
+      ),
+    [notifications, readNotificationIds],
+  );
+
+  const unreadCount =
+    unreadNotifications.length;
+
+  /* =========================
+     MARK ONE NOTIFICATION READ
+  ========================= */
+
+  const markNotificationRead = (
+    notificationId: string,
+  ) => {
+    setReadNotificationIds((current) => {
+      if (current.includes(notificationId)) {
+        return current;
+      }
+
+      const next = [
+        ...current,
+        notificationId,
+      ];
+
+      localStorage.setItem(
+        'notificationRead',
+        JSON.stringify(next),
+      );
+
+      return next;
+    });
+  };
+
+  /* =========================
+     MARK ALL READ
+  ========================= */
+
+  const markAllNotificationsRead = () => {
+    const ids = notifications.map(
+      (notification) =>
+        notification.id,
+    );
+
+    const next = Array.from(
+      new Set([
+        ...readNotificationIds,
+        ...ids,
+      ]),
+    );
+
+    setReadNotificationIds(next);
+
+    localStorage.setItem(
+      'notificationRead',
+      JSON.stringify(next),
+    );
+  };
+
+  /* =========================
+     CLEAR NOTIFICATIONS
+  ========================= */
+
+  const clearNotifications = () => {
+    const ids = notifications.map(
+      (notification) =>
+        notification.id,
+    );
+
+    const next = Array.from(
+      new Set([
+        ...dismissedNotificationIds,
+        ...ids,
+      ]),
+    );
+
+    setDismissedNotificationIds(next);
+
+    localStorage.setItem(
+      'notificationDismissed',
+      JSON.stringify(next),
+    );
+
+    setNotificationsOpen(false);
+  };
+
+  /* =========================
      STATISTICS
   ========================= */
 
@@ -228,11 +618,19 @@ export default function DashboardPage() {
       'accessToken',
     );
 
+    localStorage.removeItem('user');
+
     window.location.href = '/';
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#010705] text-white">
+    <main
+      className={`relative min-h-screen overflow-hidden bg-[#010705] text-white ${
+        compactMode
+          ? 'compact-mode'
+          : ''
+      }`}
+    >
       <Background />
 
       {/* MOBILE OVERLAY */}
@@ -259,7 +657,13 @@ export default function DashboardPage() {
       >
         {/* Brand */}
 
-        <div className="mb-10 flex items-center gap-3 px-2">
+        <div
+          className={`flex items-center gap-3 px-2 transition-all ${
+            compactMode
+              ? 'mb-6'
+              : 'mb-10'
+          }`}
+        >
           <div className="relative flex h-11 w-11 items-center justify-center">
             <div className="absolute inset-0 rounded-xl bg-[#39ff14]/20 blur-xl" />
 
@@ -287,11 +691,23 @@ export default function DashboardPage() {
 
         {/* Workspace */}
 
-        <div className="mb-3 px-3 text-[9px] font-semibold tracking-[0.22em] text-white/25">
+        <div
+          className={`px-3 text-[9px] font-semibold tracking-[0.22em] text-white/25 ${
+            compactMode
+              ? 'mb-2'
+              : 'mb-3'
+          }`}
+        >
           WORKSPACE
         </div>
 
-        <nav className="space-y-1">
+        <nav
+          className={
+            compactMode
+              ? 'space-y-0.5'
+              : 'space-y-1'
+          }
+        >
           {navItems.map((item) => {
             const Icon = item.icon;
 
@@ -305,14 +721,22 @@ export default function DashboardPage() {
                 onClick={() =>
                   setSidebarOpen(false)
                 }
-                className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-all ${
+                className={`group relative flex w-full items-center gap-3 rounded-xl px-3 text-left text-sm transition-all ${
+                  compactMode
+                    ? 'py-2'
+                    : 'py-3'
+                } ${
                   active
                     ? 'border border-[#39ff14]/10 bg-[#39ff14]/[0.08] text-white'
                     : 'text-white/45 hover:bg-white/[0.035] hover:text-white'
                 }`}
               >
                 <span
-                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                  className={`flex items-center justify-center rounded-lg ${
+                    compactMode
+                      ? 'h-8 w-8'
+                      : 'h-9 w-9'
+                  } ${
                     active
                       ? 'bg-[#39ff14]/10 text-[#39ff14]'
                       : 'text-white/40 group-hover:text-white/70'
@@ -335,7 +759,13 @@ export default function DashboardPage() {
 
         {/* System */}
 
-        <div className="mb-3 mt-9 px-3 text-[9px] font-semibold tracking-[0.22em] text-white/25">
+        <div
+          className={`px-3 text-[9px] font-semibold tracking-[0.22em] text-white/25 ${
+            compactMode
+              ? 'mb-2 mt-6'
+              : 'mb-3 mt-9'
+          }`}
+        >
           SYSTEM
         </div>
 
@@ -346,14 +776,22 @@ export default function DashboardPage() {
           onClick={() =>
             setSidebarOpen(false)
           }
-          className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-all ${
+          className={`group relative flex w-full items-center gap-3 rounded-xl px-3 text-left text-sm transition-all ${
+            compactMode
+              ? 'py-2'
+              : 'py-3'
+          } ${
             pathname === '/dashboard/settings'
               ? 'border border-[#39ff14]/10 bg-[#39ff14]/[0.08] text-white'
               : 'text-white/45 hover:bg-white/[0.035] hover:text-white'
           }`}
         >
           <span
-            className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+            className={`flex items-center justify-center rounded-lg ${
+              compactMode
+                ? 'h-8 w-8'
+                : 'h-9 w-9'
+            } ${
               pathname === '/dashboard/settings'
                 ? 'bg-[#39ff14]/10 text-[#39ff14]'
                 : 'text-white/40 group-hover:text-white/70'
@@ -393,7 +831,11 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/35 transition hover:bg-red-500/[0.06] hover:text-red-300"
+            className={`flex w-full items-center gap-3 rounded-xl px-3 text-sm text-white/35 transition hover:bg-red-500/[0.06] hover:text-red-300 ${
+              compactMode
+                ? 'py-2'
+                : 'py-3'
+            }`}
           >
             <LogOut className="h-4 w-4" />
 
@@ -407,7 +849,13 @@ export default function DashboardPage() {
       <section className="relative min-h-screen lg:pl-[270px]">
         {/* TOP BAR */}
 
-        <header className="sticky top-0 z-30 flex h-[76px] items-center gap-4 border-b border-white/[0.05] bg-[#010705]/75 px-5 backdrop-blur-2xl sm:px-8 lg:px-10">
+        <header
+          className={`sticky top-0 z-30 flex items-center gap-4 border-b border-white/[0.05] bg-[#010705]/75 px-5 backdrop-blur-2xl transition-all sm:px-8 lg:px-10 ${
+            compactMode
+              ? 'h-[62px]'
+              : 'h-[76px]'
+          }`}
+        >
           {/* Mobile menu */}
 
           <button
@@ -423,7 +871,13 @@ export default function DashboardPage() {
 
           {/* Search */}
 
-          <div className="relative flex h-11 max-w-[520px] flex-1">
+          <div
+            className={`relative flex max-w-[520px] flex-1 transition-all ${
+              compactMode
+                ? 'h-9'
+                : 'h-11'
+            }`}
+          >
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
 
             <input
@@ -449,14 +903,76 @@ export default function DashboardPage() {
           {/* User */}
 
           <div className="ml-auto flex items-center gap-3">
-            <button
-              type="button"
-              className="relative flex h-10 w-10 items-center justify-center rounded-xl text-white/40 transition hover:bg-white/[0.04] hover:text-white"
-            >
-              <Bell className="h-4 w-4" />
+            {/* NOTIFICATION BELL */}
 
-              <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_8px_rgba(57,255,20,0.9)]" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() =>
+                  setNotificationsOpen(
+                    (current) =>
+                      !current,
+                  )
+                }
+                aria-label="Notifications"
+                aria-expanded={
+                  notificationsOpen
+                }
+                className={`relative flex h-10 w-10 items-center justify-center rounded-xl transition ${
+                  notificationsOpen
+                    ? 'bg-[#39ff14]/10 text-[#39ff14]'
+                    : 'text-white/40 hover:bg-white/[0.04] hover:text-white'
+                }`}
+              >
+                <Bell className="h-4 w-4" />
+
+                {notificationsEnabled &&
+                  unreadCount > 0 && (
+                    <>
+                      <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_8px_rgba(57,255,20,0.9)]" />
+
+                      <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-[#010705] bg-[#39ff14] px-1 text-[9px] font-bold text-black shadow-[0_0_12px_rgba(57,255,20,0.35)]">
+                        {unreadCount > 9
+                          ? '9+'
+                          : unreadCount}
+                      </span>
+                    </>
+                  )}
+              </button>
+
+              {/* NOTIFICATION PANEL */}
+
+              {notificationsOpen && (
+                <NotificationPanel
+                  enabled={
+                    notificationsEnabled
+                  }
+                  notifications={
+                    notifications
+                  }
+                  unreadCount={
+                    unreadCount
+                  }
+                  readNotificationIds={
+                    readNotificationIds
+                  }
+                  onClose={() =>
+                    setNotificationsOpen(
+                      false,
+                    )
+                  }
+                  onMarkRead={
+                    markNotificationRead
+                  }
+                  onMarkAllRead={
+                    markAllNotificationsRead
+                  }
+                  onClear={
+                    clearNotifications
+                  }
+                />
+              )}
+            </div>
 
             <div className="hidden h-7 w-px bg-white/[0.07] sm:block" />
 
@@ -478,19 +994,43 @@ export default function DashboardPage() {
 
         {/* CONTENT */}
 
-        <div className="mx-auto w-full max-w-[1500px] px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
+        <div
+          className={`mx-auto w-full max-w-[1500px] px-5 transition-all sm:px-8 lg:px-10 ${
+            compactMode
+              ? 'py-5 lg:py-6'
+              : 'py-8 lg:py-10'
+          }`}
+        >
           {/* Welcome */}
 
-          <section className="mb-9 flex flex-col justify-between gap-6 xl:flex-row xl:items-end">
+          <section
+            className={`flex flex-col justify-between xl:flex-row xl:items-end ${
+              compactMode
+                ? 'mb-5 gap-4'
+                : 'mb-9 gap-6'
+            }`}
+          >
             <div>
-              <div className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#39ff14]/70">
+              <div
+                className={`flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#39ff14]/70 ${
+                  compactMode
+                    ? 'mb-2'
+                    : 'mb-4'
+                }`}
+              >
                 <span className="h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_8px_rgba(57,255,20,0.8)]" />
 
                 MPlug Workspace
               </div>
 
-              <h1 className="max-w-[700px] text-3xl font-semibold leading-[1.15] tracking-[-0.03em] sm:text-4xl lg:text-[44px]">
-                Good morning,
+              <h1
+                className={`max-w-[700px] font-semibold leading-[1.15] tracking-[-0.03em] transition-all ${
+                  compactMode
+                    ? 'text-2xl sm:text-3xl lg:text-[36px]'
+                    : 'text-3xl sm:text-4xl lg:text-[44px]'
+                }`}
+              >
+                {greeting},
                 <br />
 
                 <span className="bg-gradient-to-r from-white via-white to-[#39ff14] bg-clip-text text-transparent">
@@ -498,7 +1038,13 @@ export default function DashboardPage() {
                 </span>
               </h1>
 
-              <p className="mt-4 max-w-[600px] text-sm leading-6 text-white/35 sm:text-[15px]">
+              <p
+                className={`max-w-[600px] text-sm leading-6 text-white/35 sm:text-[15px] ${
+                  compactMode
+                    ? 'mt-2'
+                    : 'mt-4'
+                }`}
+              >
                 Stay focused, keep the team aligned,
                 and turn today&apos;s responsibilities into
                 meaningful progress.
@@ -510,7 +1056,11 @@ export default function DashboardPage() {
               onClick={() =>
                 setCreateModalOpen(true)
               }
-              className="flex w-fit items-center gap-2.5 rounded-xl border border-[#39ff14]/20 bg-[#39ff14]/[0.09] px-5 py-3 text-sm font-semibold text-[#b9ffad] shadow-[0_0_30px_rgba(57,255,20,0.06)] transition hover:border-[#39ff14]/40 hover:bg-[#39ff14]/[0.14]"
+              className={`flex w-fit items-center gap-2.5 rounded-xl border border-[#39ff14]/20 bg-[#39ff14]/[0.09] text-sm font-semibold text-[#b9ffad] shadow-[0_0_30px_rgba(57,255,20,0.06)] transition hover:border-[#39ff14]/40 hover:bg-[#39ff14]/[0.14] ${
+                compactMode
+                  ? 'px-4 py-2'
+                  : 'px-5 py-3'
+              }`}
             >
               <Plus className="h-4 w-4" />
 
@@ -540,7 +1090,13 @@ export default function DashboardPage() {
 
           {/* Statistics */}
 
-          <section className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section
+            className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 ${
+              compactMode
+                ? 'mb-5 gap-2.5'
+                : 'mb-7 gap-4'
+            }`}
+          >
             <StatCard
               label="Total tasks"
               value={statistics.total}
@@ -584,8 +1140,20 @@ export default function DashboardPage() {
 
           {/* RECENT TASKS */}
 
-          <section className="mb-7 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.018] shadow-[0_20px_80px_rgba(0,0,0,0.18)] backdrop-blur-xl">
-            <div className="border-b border-white/[0.05] px-5 py-5 sm:px-6">
+          <section
+            className={`overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.018] shadow-[0_20px_80px_rgba(0,0,0,0.18)] backdrop-blur-xl ${
+              compactMode
+                ? 'mb-5'
+                : 'mb-7'
+            }`}
+          >
+            <div
+              className={`border-b border-white/[0.05] sm:px-6 ${
+                compactMode
+                  ? 'px-4 py-3'
+                  : 'px-5 py-5'
+              }`}
+            >
               <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
                 <div>
                   <div className="flex items-center gap-3">
@@ -598,7 +1166,13 @@ export default function DashboardPage() {
                     </span>
                   </div>
 
-                  <p className="mt-1.5 text-xs text-white/30">
+                  <p
+                    className={`text-xs text-white/30 ${
+                      compactMode
+                        ? 'mt-0.5'
+                        : 'mt-1.5'
+                    }`}
+                  >
                     Keep an eye on what&apos;s happening
                     across the workspace.
                   </p>
@@ -616,7 +1190,13 @@ export default function DashboardPage() {
 
               {/* FILTERS */}
 
-              <div className="mt-5">
+              <div
+                className={
+                  compactMode
+                    ? 'mt-3'
+                    : 'mt-5'
+                }
+              >
                 <TaskFilters
                   filters={filters}
                   onChange={setFilters}
@@ -629,13 +1209,14 @@ export default function DashboardPage() {
             {/* TASK CONTENT */}
 
             {loading ? (
-              <Loading />
+              <Loading compactMode={compactMode} />
             ) : tasks.length === 0 ? (
               <EmptyState
                 search={searchValue}
                 hasFilters={hasActiveFilters(
                   filters,
                 )}
+                compactMode={compactMode}
               />
             ) : (
               <div className="divide-y divide-white/[0.045]">
@@ -655,10 +1236,22 @@ export default function DashboardPage() {
 
           {/* BOTTOM */}
 
-          <section className="grid grid-cols-1 gap-5 xl:grid-cols-[1.5fr_1fr]">
+          <section
+            className={`grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] ${
+              compactMode
+                ? 'gap-3'
+                : 'gap-5'
+            }`}
+          >
             {/* Workflow */}
 
-            <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.035] to-white/[0.012] p-6">
+            <div
+              className={`relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.035] to-white/[0.012] ${
+                compactMode
+                  ? 'p-4'
+                  : 'p-6'
+              }`}
+            >
               <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-[#39ff14]/10 blur-[70px]" />
 
               <div className="relative flex items-start justify-between">
@@ -667,7 +1260,13 @@ export default function DashboardPage() {
                     WORKFLOW
                   </span>
 
-                  <h3 className="mt-2 text-xl font-semibold leading-tight text-white/90">
+                  <h3
+                    className={`font-semibold leading-tight text-white/90 ${
+                      compactMode
+                        ? 'mt-1 text-lg'
+                        : 'mt-2 text-xl'
+                    }`}
+                  >
                     Your workspace
                     <br />
 
@@ -677,12 +1276,30 @@ export default function DashboardPage() {
                   </h3>
                 </div>
 
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#39ff14]/10 bg-[#39ff14]/[0.06] text-[#39ff14]">
-                  <Sparkles className="h-5 w-5" />
+                <div
+                  className={`flex items-center justify-center rounded-xl border border-[#39ff14]/10 bg-[#39ff14]/[0.06] text-[#39ff14] ${
+                    compactMode
+                      ? 'h-9 w-9'
+                      : 'h-11 w-11'
+                  }`}
+                >
+                  <Sparkles
+                    className={
+                      compactMode
+                        ? 'h-4 w-4'
+                        : 'h-5 w-5'
+                    }
+                  />
                 </div>
               </div>
 
-              <div className="mt-9">
+              <div
+                className={
+                  compactMode
+                    ? 'mt-5'
+                    : 'mt-9'
+                }
+              >
                 <div className="flex h-3 overflow-hidden rounded-full bg-white/[0.04]">
                   <span
                     className="bg-[#38bdf8]"
@@ -715,7 +1332,13 @@ export default function DashboardPage() {
                   />
                 </div>
 
-                <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3">
+                <div
+                  className={`flex flex-wrap gap-x-6 gap-y-3 ${
+                    compactMode
+                      ? 'mt-3'
+                      : 'mt-5'
+                  }`}
+                >
                   <Legend
                     color="bg-[#38bdf8]"
                     label="To do"
@@ -736,23 +1359,53 @@ export default function DashboardPage() {
 
             {/* Quick action */}
 
-            <div className="group relative overflow-hidden rounded-2xl border border-[#39ff14]/10 bg-[#39ff14]/[0.035] p-6 transition hover:border-[#39ff14]/20 hover:bg-[#39ff14]/[0.05]">
+            <div
+              className={`group relative overflow-hidden rounded-2xl border border-[#39ff14]/10 bg-[#39ff14]/[0.035] transition hover:border-[#39ff14]/20 hover:bg-[#39ff14]/[0.05] ${
+                compactMode
+                  ? 'p-4'
+                  : 'p-6'
+              }`}
+            >
               <div className="absolute -bottom-20 -right-20 h-44 w-44 rounded-full bg-[#39ff14]/10 blur-[70px]" />
 
               <div className="relative flex h-full flex-col">
-                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl border border-[#39ff14]/15 bg-[#39ff14]/[0.08] text-[#39ff14]">
-                  <Plus className="h-5 w-5" />
+                <div
+                  className={`flex items-center justify-center rounded-xl border border-[#39ff14]/15 bg-[#39ff14]/[0.08] text-[#39ff14] ${
+                    compactMode
+                      ? 'mb-3 h-9 w-9'
+                      : 'mb-5 h-11 w-11'
+                  }`}
+                >
+                  <Plus
+                    className={
+                      compactMode
+                        ? 'h-4 w-4'
+                        : 'h-5 w-5'
+                    }
+                  />
                 </div>
 
                 <span className="text-[9px] font-semibold tracking-[0.2em] text-[#39ff14]/55">
                   QUICK ACTION
                 </span>
 
-                <h3 className="mt-2 text-lg font-semibold text-white/85">
+                <h3
+                  className={`font-semibold text-white/85 ${
+                    compactMode
+                      ? 'mt-1 text-base'
+                      : 'mt-2 text-lg'
+                  }`}
+                >
                   Create a new task
                 </h3>
 
-                <p className="mt-2 max-w-[340px] text-xs leading-5 text-white/30">
+                <p
+                  className={`max-w-[340px] text-xs leading-5 text-white/30 ${
+                    compactMode
+                      ? 'mt-1'
+                      : 'mt-2'
+                  }`}
+                >
                   Turn an idea into an actionable
                   responsibility for your team.
                 </p>
@@ -762,7 +1415,11 @@ export default function DashboardPage() {
                   onClick={() =>
                     setCreateModalOpen(true)
                   }
-                  className="mt-auto flex h-10 w-10 items-center justify-center self-end rounded-xl border border-white/[0.06] bg-white/[0.025] text-white/40 transition hover:border-[#39ff14]/20 hover:bg-[#39ff14]/10 hover:text-[#39ff14]"
+                  className={`mt-auto flex items-center justify-center self-end rounded-xl border border-white/[0.06] bg-white/[0.025] text-white/40 transition hover:border-[#39ff14]/20 hover:bg-[#39ff14]/10 hover:text-[#39ff14] ${
+                    compactMode
+                      ? 'h-9 w-9'
+                      : 'h-10 w-10'
+                  }`}
                 >
                   <ArrowRight className="h-4 w-4" />
                 </button>
@@ -830,6 +1487,212 @@ export default function DashboardPage() {
 }
 
 /* ==========================================================================
+   NOTIFICATION PANEL
+========================================================================== */
+
+function NotificationPanel({
+  enabled,
+  notifications,
+  unreadCount,
+  readNotificationIds,
+  onClose,
+  onMarkRead,
+  onMarkAllRead,
+  onClear,
+}: {
+  enabled: boolean;
+  notifications: DashboardNotification[];
+  unreadCount: number;
+  readNotificationIds: string[];
+  onClose: () => void;
+  onMarkRead: (
+    notificationId: string,
+  ) => void;
+  onMarkAllRead: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="absolute right-0 top-12 z-50 w-[min(380px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#07100d]/95 shadow-[0_25px_80px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
+      {/* HEADER */}
+
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-white">
+              Notifications
+            </h3>
+
+            {enabled &&
+              unreadCount > 0 && (
+                <span className="rounded-full bg-[#39ff14]/10 px-2 py-0.5 text-[9px] font-semibold text-[#39ff14]">
+                  {unreadCount} unread
+                </span>
+              )}
+          </div>
+
+          <p className="mt-1 text-[11px] text-white/30">
+            Stay on top of your workspace.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close notifications"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-white/30 transition hover:bg-white/[0.05] hover:text-white"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* DISABLED */}
+
+      {!enabled ? (
+        <div className="px-6 py-10 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.025] text-white/25">
+            <Bell className="h-5 w-5" />
+          </div>
+
+          <h4 className="text-sm font-medium text-white/75">
+            Notifications are off
+          </h4>
+
+          <p className="mx-auto mt-2 max-w-[260px] text-xs leading-5 text-white/30">
+            Turn on notifications in Settings to
+            receive task alerts here.
+          </p>
+
+          <Link
+            href="/dashboard/settings"
+            onClick={onClose}
+            className="mt-5 inline-flex items-center gap-2 rounded-xl border border-[#39ff14]/15 bg-[#39ff14]/[0.06] px-4 py-2 text-xs font-medium text-[#39ff14] transition hover:bg-[#39ff14]/10"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            Open Settings
+          </Link>
+        </div>
+      ) : notifications.length === 0 ? (
+        /* EMPTY */
+
+        <div className="px-6 py-10 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#39ff14]/10 bg-[#39ff14]/[0.04] text-[#39ff14]/70">
+            <CheckCheck className="h-5 w-5" />
+          </div>
+
+          <h4 className="text-sm font-medium text-white/75">
+            You&apos;re all caught up
+          </h4>
+
+          <p className="mt-2 text-xs leading-5 text-white/30">
+            There are no urgent or overdue tasks
+            right now.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* ACTIONS */}
+
+          <div className="flex items-center justify-between border-b border-white/[0.05] px-4 py-2.5">
+            <button
+              type="button"
+              onClick={
+                onMarkAllRead
+              }
+              disabled={
+                unreadCount === 0
+              }
+              className="inline-flex items-center gap-1.5 text-[10px] font-medium text-white/35 transition hover:text-[#39ff14] disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+              Mark all read
+            </button>
+
+            <button
+              type="button"
+              onClick={onClear}
+              className="inline-flex items-center gap-1.5 text-[10px] font-medium text-white/25 transition hover:text-red-300"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Clear
+            </button>
+          </div>
+
+          {/* LIST */}
+
+          <div className="max-h-[420px] overflow-y-auto">
+            {notifications.map(
+              (notification) => {
+                const read =
+                  readNotificationIds.includes(
+                    notification.id,
+                  );
+
+                return (
+                  <Link
+                    key={notification.id}
+                    href="/dashboard/my-tasks"
+                    onClick={() => {
+                      onMarkRead(
+                        notification.id,
+                      );
+                      onClose();
+                    }}
+                    className={`group block border-b border-white/[0.045] px-4 py-4 transition last:border-b-0 hover:bg-white/[0.025] ${
+                      read
+                        ? 'opacity-55'
+                        : 'bg-[#39ff14]/[0.015]'
+                    }`}
+                  >
+                    <div className="flex gap-3">
+                      <div
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                          notification.type ===
+                          'overdue'
+                            ? 'bg-red-400/10 text-red-300'
+                            : 'bg-orange-400/10 text-orange-300'
+                        }`}
+                      >
+                        {notification.type ===
+                        'overdue' ? (
+                          <Clock3 className="h-4 w-4" />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-xs font-semibold text-white/80">
+                            {notification.title}
+                          </p>
+
+                          {!read && (
+                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#39ff14] shadow-[0_0_7px_rgba(57,255,20,0.8)]" />
+                          )}
+                        </div>
+
+                        <p className="mt-1 text-[11px] leading-5 text-white/35">
+                          {notification.message}
+                        </p>
+
+                        <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-white/25 transition group-hover:text-[#39ff14]">
+                          View task
+                          <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              },
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ==========================================================================
    BACKGROUND
 ========================================================================== */
 
@@ -870,9 +1733,19 @@ function Avatar() {
    LOADING
 ========================================================================== */
 
-function Loading() {
+function Loading({
+  compactMode,
+}: {
+  compactMode: boolean;
+}) {
   return (
-    <div className="flex min-h-[260px] flex-col items-center justify-center gap-4">
+    <div
+      className={`flex flex-col items-center justify-center gap-4 ${
+        compactMode
+          ? 'min-h-[190px] gap-2'
+          : 'min-h-[260px]'
+      }`}
+    >
       <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/[0.08] border-t-[#39ff14]" />
 
       <span className="text-xs text-white/30">
@@ -889,13 +1762,27 @@ function Loading() {
 function EmptyState({
   search,
   hasFilters,
+  compactMode,
 }: {
   search: string;
   hasFilters: boolean;
+  compactMode: boolean;
 }) {
   return (
-    <div className="flex min-h-[260px] flex-col items-center justify-center px-5 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.025] text-white/25">
+    <div
+      className={`flex flex-col items-center justify-center px-5 text-center ${
+        compactMode
+          ? 'min-h-[190px]'
+          : 'min-h-[260px]'
+      }`}
+    >
+      <div
+        className={`flex items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.025] text-white/25 ${
+          compactMode
+            ? 'mb-2 h-11 w-11'
+            : 'mb-4 h-14 w-14'
+        }`}
+      >
         <CheckCircle2 className="h-5 w-5" />
       </div>
 

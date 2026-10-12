@@ -3,6 +3,14 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   'http://localhost:3001';
 
+/* =========================
+   USER TYPES
+========================= */
+
+export type UserRole =
+  | 'USER'
+  | 'ADMIN';
+
 export interface AssignedUser {
   id: number;
   name: string;
@@ -12,6 +20,10 @@ export interface AssignedUser {
   createdAt: string;
   updatedAt: string;
 }
+
+/* =========================
+   TASK TYPES
+========================= */
 
 export interface Task {
   id: number;
@@ -88,7 +100,7 @@ export async function login(
       Array.isArray(data.message)
         ? data.message[0]
         : data.message ||
-          'Unable to sign in.',
+            'Unable to sign in.',
     );
   }
 
@@ -123,7 +135,10 @@ export async function getTasks(
   }
 
   if (filters.search?.trim()) {
-    params.set('search', filters.search.trim());
+    params.set(
+      'search',
+      filters.search.trim(),
+    );
   }
 
   if (filters.assignedTo) {
@@ -152,7 +167,7 @@ export async function getTasks(
       Array.isArray(data.message)
         ? data.message[0]
         : data.message ||
-          'Unable to load tasks.',
+            'Unable to load tasks.',
     );
   }
 
@@ -212,15 +227,12 @@ export async function getMyTasks(
       Array.isArray(data.message)
         ? data.message[0]
         : data.message ||
-          'Unable to load your tasks.',
+            'Unable to load your tasks.',
     );
   }
 
   return data;
 }
-
-
-
 
 /* =========================
    GET USERS
@@ -248,7 +260,48 @@ export async function getUsers(
       Array.isArray(data.message)
         ? data.message[0]
         : data.message ||
-          'Unable to load users.',
+            'Unable to load users.',
+    );
+  }
+
+  return data;
+}
+
+/* =========================
+   CREATE USER
+========================= */
+
+export interface CreateUserPayload {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+}
+
+export async function createUser(
+  accessToken: string,
+  user: CreateUserPayload,
+): Promise<AssignedUser> {
+  const response = await fetch(
+    `${API_URL}/users`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(user),
+    },
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      Array.isArray(data.message)
+        ? data.message.join(', ')
+        : data.message ||
+            'Unable to create user.',
     );
   }
 
@@ -296,7 +349,7 @@ export async function createTask(
       Array.isArray(data.message)
         ? data.message[0]
         : data.message ||
-          'Unable to create task.',
+            'Unable to create task.',
     );
   }
 
@@ -345,7 +398,7 @@ export async function updateTask(
       Array.isArray(data.message)
         ? data.message[0]
         : data.message ||
-          'Unable to update task.',
+            'Unable to update task.',
     );
   }
 
@@ -395,10 +448,9 @@ export async function deleteTask(
       Array.isArray(data.message)
         ? data.message[0]
         : data.message ||
-          'Unable to delete task.',
+            'Unable to delete task.',
     );
   }
 
   return true;
 }
-
