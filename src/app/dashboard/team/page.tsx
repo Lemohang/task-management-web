@@ -28,7 +28,6 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
-
 import {
   createUser,
   getTasks,
