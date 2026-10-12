@@ -79,6 +79,14 @@ type WorkspaceSettings = {
   compactMode: boolean;
 };
 
+type CurrentUser = {
+  id?: number | string;
+  name?: string;
+  email?: string;
+  role?: string;
+  isActive?: boolean;
+};
+
 const DEFAULT_SETTINGS: WorkspaceSettings = {
   notifications: true,
   emailNotifications: false,
@@ -94,6 +102,137 @@ type DashboardNotification = {
 };
 
 export default function DashboardPage() {
+  /* =========================
+     CURRENT LOGGED-IN USER
+  ========================= */
+
+  const [currentUser, setCurrentUser] =
+    useState<CurrentUser>({});
+
+  useEffect(() => {
+    const loadCurrentUser = () => {
+      try {
+        const storedUser =
+          localStorage.getItem('user');
+
+        if (!storedUser) {
+          setCurrentUser({});
+          return;
+        }
+
+        const parsed: unknown =
+          JSON.parse(storedUser);
+
+        if (
+          !parsed ||
+          typeof parsed !== 'object'
+        ) {
+          setCurrentUser({});
+          return;
+        }
+
+        const record =
+          parsed as Record<string, unknown>;
+
+        // Support both { name, email, role }
+        // and { user: { name, email, role } }.
+        const nestedUser =
+          record.user &&
+          typeof record.user === 'object'
+            ? record.user as Record<string, unknown>
+            : record;
+
+        const name =
+          typeof nestedUser.name === 'string'
+            ? nestedUser.name
+            : '';
+
+        const email =
+          typeof nestedUser.email === 'string'
+            ? nestedUser.email
+            : '';
+
+        const role =
+          typeof nestedUser.role === 'string'
+            ? nestedUser.role
+            : '';
+
+        const idValue =
+          nestedUser.id;
+
+        const id =
+          typeof idValue === 'number' ||
+          typeof idValue === 'string'
+            ? idValue
+            : undefined;
+
+        setCurrentUser({
+          id,
+          name,
+          email,
+          role,
+          isActive:
+            typeof nestedUser.isActive === 'boolean'
+              ? nestedUser.isActive
+              : true,
+        });
+      } catch {
+        setCurrentUser({});
+      }
+    };
+
+    loadCurrentUser();
+
+    // Refresh the profile if another tab changes it.
+    window.addEventListener(
+      'storage',
+      loadCurrentUser,
+    );
+
+    // Refresh when the Settings page updates the profile.
+    window.addEventListener(
+      'profileChanged',
+      loadCurrentUser,
+    );
+
+    return () => {
+      window.removeEventListener(
+        'storage',
+        loadCurrentUser,
+      );
+
+      window.removeEventListener(
+        'profileChanged',
+        loadCurrentUser,
+      );
+    };
+  }, []);
+
+  const displayName =
+    currentUser.name?.trim() ||
+    currentUser.email?.split('@')[0] ||
+    'User';
+
+  const normalizedRole =
+    currentUser.role?.trim().toUpperCase();
+
+  const displayRole =
+    normalizedRole === 'ADMIN'
+      ? 'Administrator'
+      : normalizedRole === 'USER'
+        ? 'Team member'
+        : currentUser.role?.trim() ||
+          'Team member';
+
+  const avatarInitials =
+    displayName
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0))
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || 'U';
+
   /* =========================
      TASK STATE
   ========================= */
@@ -135,9 +274,7 @@ export default function DashboardPage() {
   const [
     notificationsEnabled,
     setNotificationsEnabled,
-  ] = useState(
-    DEFAULT_SETTINGS.notifications,
-  );
+  ] = useState(DEFAULT_SETTINGS.notifications);
 
   const [
     notificationsOpen,
@@ -183,9 +320,7 @@ export default function DashboardPage() {
         }
 
         const parsed =
-          JSON.parse(
-            stored,
-          ) as Partial<WorkspaceSettings>;
+          JSON.parse(stored) as Partial<WorkspaceSettings>;
 
         setCompactMode(
           parsed.compactMode ??
@@ -243,13 +378,10 @@ export default function DashboardPage() {
   useEffect(() => {
     try {
       const storedRead =
-        localStorage.getItem(
-          'notificationRead',
-        );
+        localStorage.getItem('notificationRead');
 
       if (storedRead) {
-        const parsed =
-          JSON.parse(storedRead);
+        const parsed = JSON.parse(storedRead);
 
         if (Array.isArray(parsed)) {
           setReadNotificationIds(
@@ -262,13 +394,10 @@ export default function DashboardPage() {
       }
 
       const storedDismissed =
-        localStorage.getItem(
-          'notificationDismissed',
-        );
+        localStorage.getItem('notificationDismissed');
 
       if (storedDismissed) {
-        const parsed =
-          JSON.parse(storedDismissed);
+        const parsed = JSON.parse(storedDismissed);
 
         if (Array.isArray(parsed)) {
           setDismissedNotificationIds(
@@ -298,10 +427,7 @@ export default function DashboardPage() {
 
       if (hour >= 5 && hour < 12) {
         setGreeting('Good morning');
-      } else if (
-        hour >= 12 &&
-        hour < 18
-      ) {
+      } else if (hour >= 12 && hour < 18) {
         setGreeting('Good afternoon');
       } else {
         setGreeting('Good evening');
@@ -310,11 +436,10 @@ export default function DashboardPage() {
 
     updateTime();
 
-    const interval =
-      window.setInterval(
-        updateTime,
-        60 * 1000,
-      );
+    const interval = window.setInterval(
+      updateTime,
+      60 * 1000,
+    );
 
     return () => {
       window.clearInterval(interval);
@@ -400,18 +525,13 @@ export default function DashboardPage() {
   const notifications = useMemo<
     DashboardNotification[]
   >(() => {
-    if (!notificationsEnabled) {
-      return [];
-    }
-
-    if (!currentTime) {
+    if (!notificationsEnabled || !currentTime) {
       return [];
     }
 
     const now = new Date(currentTime);
 
-    const generated: DashboardNotification[] =
-      [];
+    const generated: DashboardNotification[] = [];
 
     tasks.forEach((task) => {
       const taskStatus =
@@ -420,20 +540,14 @@ export default function DashboardPage() {
       const taskPriority =
         String(task.priority).toUpperCase();
 
-      /* OVERDUE */
-
       if (
         task.dueDate &&
         taskStatus !== 'COMPLETED'
       ) {
-        const dueDate = new Date(
-          task.dueDate,
-        );
+        const dueDate = new Date(task.dueDate);
 
         if (
-          !Number.isNaN(
-            dueDate.getTime(),
-          ) &&
+          !Number.isNaN(dueDate.getTime()) &&
           dueDate.getTime() < now.getTime()
         ) {
           generated.push({
@@ -445,8 +559,6 @@ export default function DashboardPage() {
           });
         }
       }
-
-      /* URGENT */
 
       if (
         taskPriority === 'URGENT' &&
@@ -488,8 +600,7 @@ export default function DashboardPage() {
     [notifications, readNotificationIds],
   );
 
-  const unreadCount =
-    unreadNotifications.length;
+  const unreadCount = unreadNotifications.length;
 
   /* =========================
      MARK ONE NOTIFICATION READ
@@ -503,10 +614,7 @@ export default function DashboardPage() {
         return current;
       }
 
-      const next = [
-        ...current,
-        notificationId,
-      ];
+      const next = [...current, notificationId];
 
       localStorage.setItem(
         'notificationRead',
@@ -523,15 +631,11 @@ export default function DashboardPage() {
 
   const markAllNotificationsRead = () => {
     const ids = notifications.map(
-      (notification) =>
-        notification.id,
+      (notification) => notification.id,
     );
 
     const next = Array.from(
-      new Set([
-        ...readNotificationIds,
-        ...ids,
-      ]),
+      new Set([...readNotificationIds, ...ids]),
     );
 
     setReadNotificationIds(next);
@@ -548,8 +652,7 @@ export default function DashboardPage() {
 
   const clearNotifications = () => {
     const ids = notifications.map(
-      (notification) =>
-        notification.id,
+      (notification) => notification.id,
     );
 
     const next = Array.from(
@@ -582,13 +685,11 @@ export default function DashboardPage() {
       ).length,
 
       inProgress: tasks.filter(
-        (task) =>
-          task.status === 'IN_PROGRESS',
+        (task) => task.status === 'IN_PROGRESS',
       ).length,
 
       completed: tasks.filter(
-        (task) =>
-          task.status === 'COMPLETED',
+        (task) => task.status === 'COMPLETED',
       ).length,
     }),
     [tasks],
@@ -598,8 +699,7 @@ export default function DashboardPage() {
      SEARCH VALUE
   ========================= */
 
-  const searchValue =
-    filters.search ?? '';
+  const searchValue = filters.search ?? '';
 
   /* =========================
      RESET FILTERS
@@ -614,10 +714,7 @@ export default function DashboardPage() {
   ========================= */
 
   const handleLogout = () => {
-    localStorage.removeItem(
-      'accessToken',
-    );
-
+    localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
 
     window.location.href = '/';
@@ -626,9 +723,7 @@ export default function DashboardPage() {
   return (
     <main
       className={`relative min-h-screen overflow-hidden bg-[#010705] text-white ${
-        compactMode
-          ? 'compact-mode'
-          : ''
+        compactMode ? 'compact-mode' : ''
       }`}
     >
       <Background />
@@ -638,9 +733,7 @@ export default function DashboardPage() {
       {sidebarOpen && (
         <button
           type="button"
-          onClick={() =>
-            setSidebarOpen(false)
-          }
+          onClick={() => setSidebarOpen(false)}
           aria-label="Close navigation"
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
         />
@@ -650,18 +743,14 @@ export default function DashboardPage() {
 
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-[270px] flex-col border-r border-white/[0.06] bg-[#020908]/95 px-5 py-6 backdrop-blur-2xl transition-transform duration-300 lg:translate-x-0 ${
-          sidebarOpen
-            ? 'translate-x-0'
-            : '-translate-x-full'
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Brand */}
 
         <div
           className={`flex items-center gap-3 px-2 transition-all ${
-            compactMode
-              ? 'mb-6'
-              : 'mb-10'
+            compactMode ? 'mb-6' : 'mb-10'
           }`}
         >
           <div className="relative flex h-11 w-11 items-center justify-center">
@@ -693,38 +782,26 @@ export default function DashboardPage() {
 
         <div
           className={`px-3 text-[9px] font-semibold tracking-[0.22em] text-white/25 ${
-            compactMode
-              ? 'mb-2'
-              : 'mb-3'
+            compactMode ? 'mb-2' : 'mb-3'
           }`}
         >
           WORKSPACE
         </div>
 
         <nav
-          className={
-            compactMode
-              ? 'space-y-0.5'
-              : 'space-y-1'
-          }
+          className={compactMode ? 'space-y-0.5' : 'space-y-1'}
         >
           {navItems.map((item) => {
             const Icon = item.icon;
-
-            const active =
-              pathname === item.href;
+            const active = pathname === item.href;
 
             return (
               <Link
                 key={item.label}
                 href={item.href}
-                onClick={() =>
-                  setSidebarOpen(false)
-                }
+                onClick={() => setSidebarOpen(false)}
                 className={`group relative flex w-full items-center gap-3 rounded-xl px-3 text-left text-sm transition-all ${
-                  compactMode
-                    ? 'py-2'
-                    : 'py-3'
+                  compactMode ? 'py-2' : 'py-3'
                 } ${
                   active
                     ? 'border border-[#39ff14]/10 bg-[#39ff14]/[0.08] text-white'
@@ -733,9 +810,7 @@ export default function DashboardPage() {
               >
                 <span
                   className={`flex items-center justify-center rounded-lg ${
-                    compactMode
-                      ? 'h-8 w-8'
-                      : 'h-9 w-9'
+                    compactMode ? 'h-8 w-8' : 'h-9 w-9'
                   } ${
                     active
                       ? 'bg-[#39ff14]/10 text-[#39ff14]'
@@ -761,9 +836,7 @@ export default function DashboardPage() {
 
         <div
           className={`px-3 text-[9px] font-semibold tracking-[0.22em] text-white/25 ${
-            compactMode
-              ? 'mb-2 mt-6'
-              : 'mb-3 mt-9'
+            compactMode ? 'mb-2 mt-6' : 'mb-3 mt-9'
           }`}
         >
           SYSTEM
@@ -773,13 +846,9 @@ export default function DashboardPage() {
 
         <Link
           href="/dashboard/settings"
-          onClick={() =>
-            setSidebarOpen(false)
-          }
+          onClick={() => setSidebarOpen(false)}
           className={`group relative flex w-full items-center gap-3 rounded-xl px-3 text-left text-sm transition-all ${
-            compactMode
-              ? 'py-2'
-              : 'py-3'
+            compactMode ? 'py-2' : 'py-3'
           } ${
             pathname === '/dashboard/settings'
               ? 'border border-[#39ff14]/10 bg-[#39ff14]/[0.08] text-white'
@@ -788,9 +857,7 @@ export default function DashboardPage() {
         >
           <span
             className={`flex items-center justify-center rounded-lg ${
-              compactMode
-                ? 'h-8 w-8'
-                : 'h-9 w-9'
+              compactMode ? 'h-8 w-8' : 'h-9 w-9'
             } ${
               pathname === '/dashboard/settings'
                 ? 'bg-[#39ff14]/10 text-[#39ff14]'
@@ -800,45 +867,40 @@ export default function DashboardPage() {
             <Settings className="h-4 w-4" />
           </span>
 
-          <span className="font-medium">
-            Settings
-          </span>
+          <span className="font-medium">Settings</span>
 
           {pathname === '/dashboard/settings' && (
             <span className="absolute right-3 h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_10px_rgba(57,255,20,0.9)]" />
           )}
         </Link>
 
-        {/* Bottom */}
+        {/* Bottom user profile */}
 
         <div className="mt-auto border-t border-white/[0.06] pt-5">
           <div className="mb-3 flex items-center gap-3 px-2">
-            <Avatar />
+            <Avatar initials={avatarInitials} />
 
             <div className="min-w-0 flex-1">
               <strong className="block truncate text-xs font-semibold text-white/80">
-                MPlug Admin
+                {displayName}
               </strong>
 
-              <span className="text-[10px] text-white/30">
-                Workspace
+              <span className="block truncate text-[10px] text-white/30">
+                {displayRole}
               </span>
             </div>
 
-            <MoreHorizontal className="h-4 w-4 text-white/25" />
+            <MoreHorizontal className="h-4 w-4 shrink-0 text-white/25" />
           </div>
 
           <button
             type="button"
             onClick={handleLogout}
             className={`flex w-full items-center gap-3 rounded-xl px-3 text-sm text-white/35 transition hover:bg-red-500/[0.06] hover:text-red-300 ${
-              compactMode
-                ? 'py-2'
-                : 'py-3'
+              compactMode ? 'py-2' : 'py-3'
             }`}
           >
             <LogOut className="h-4 w-4" />
-
             <span>Sign out</span>
           </button>
         </div>
@@ -851,18 +913,14 @@ export default function DashboardPage() {
 
         <header
           className={`sticky top-0 z-30 flex items-center gap-4 border-b border-white/[0.05] bg-[#010705]/75 px-5 backdrop-blur-2xl transition-all sm:px-8 lg:px-10 ${
-            compactMode
-              ? 'h-[62px]'
-              : 'h-[76px]'
+            compactMode ? 'h-[62px]' : 'h-[76px]'
           }`}
         >
           {/* Mobile menu */}
 
           <button
             type="button"
-            onClick={() =>
-              setSidebarOpen(true)
-            }
+            onClick={() => setSidebarOpen(true)}
             aria-label="Open navigation"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.025] text-white/60 lg:hidden"
           >
@@ -873,9 +931,7 @@ export default function DashboardPage() {
 
           <div
             className={`relative flex max-w-[520px] flex-1 transition-all ${
-              compactMode
-                ? 'h-9'
-                : 'h-11'
+              compactMode ? 'h-9' : 'h-11'
             }`}
           >
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
@@ -887,9 +943,7 @@ export default function DashboardPage() {
               onChange={(event) =>
                 setFilters((current) => ({
                   ...current,
-                  search:
-                    event.target.value ||
-                    undefined,
+                  search: event.target.value || undefined,
                 }))
               }
               className="h-full w-full rounded-xl border border-white/[0.06] bg-white/[0.025] pl-11 pr-16 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-[#39ff14]/20 focus:bg-white/[0.035]"
@@ -909,15 +963,10 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() =>
-                  setNotificationsOpen(
-                    (current) =>
-                      !current,
-                  )
+                  setNotificationsOpen((current) => !current)
                 }
                 aria-label="Notifications"
-                aria-expanded={
-                  notificationsOpen
-                }
+                aria-expanded={notificationsOpen}
                 className={`relative flex h-10 w-10 items-center justify-center rounded-xl transition ${
                   notificationsOpen
                     ? 'bg-[#39ff14]/10 text-[#39ff14]'
@@ -926,50 +975,29 @@ export default function DashboardPage() {
               >
                 <Bell className="h-4 w-4" />
 
-                {notificationsEnabled &&
-                  unreadCount > 0 && (
-                    <>
-                      <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_8px_rgba(57,255,20,0.9)]" />
+                {notificationsEnabled && unreadCount > 0 && (
+                  <>
+                    <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_8px_rgba(57,255,20,0.9)]" />
 
-                      <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-[#010705] bg-[#39ff14] px-1 text-[9px] font-bold text-black shadow-[0_0_12px_rgba(57,255,20,0.35)]">
-                        {unreadCount > 9
-                          ? '9+'
-                          : unreadCount}
-                      </span>
-                    </>
-                  )}
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-[#010705] bg-[#39ff14] px-1 text-[9px] font-bold text-black shadow-[0_0_12px_rgba(57,255,20,0.35)]">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  </>
+                )}
               </button>
 
               {/* NOTIFICATION PANEL */}
 
               {notificationsOpen && (
                 <NotificationPanel
-                  enabled={
-                    notificationsEnabled
-                  }
-                  notifications={
-                    notifications
-                  }
-                  unreadCount={
-                    unreadCount
-                  }
-                  readNotificationIds={
-                    readNotificationIds
-                  }
-                  onClose={() =>
-                    setNotificationsOpen(
-                      false,
-                    )
-                  }
-                  onMarkRead={
-                    markNotificationRead
-                  }
-                  onMarkAllRead={
-                    markAllNotificationsRead
-                  }
-                  onClear={
-                    clearNotifications
-                  }
+                  enabled={notificationsEnabled}
+                  notifications={notifications}
+                  unreadCount={unreadCount}
+                  readNotificationIds={readNotificationIds}
+                  onClose={() => setNotificationsOpen(false)}
+                  onMarkRead={markNotificationRead}
+                  onMarkAllRead={markAllNotificationsRead}
+                  onClear={clearNotifications}
                 />
               )}
             </div>
@@ -977,15 +1005,15 @@ export default function DashboardPage() {
             <div className="hidden h-7 w-px bg-white/[0.07] sm:block" />
 
             <div className="hidden items-center gap-3 sm:flex">
-              <Avatar />
+              <Avatar initials={avatarInitials} />
 
               <div className="hidden md:block">
-                <strong className="block text-xs font-semibold text-white/75">
-                  MPlug Admin
+                <strong className="block max-w-[180px] truncate text-xs font-semibold text-white/75">
+                  {displayName}
                 </strong>
 
                 <span className="text-[10px] text-white/30">
-                  Administrator
+                  {displayRole}
                 </span>
               </div>
             </div>
@@ -996,30 +1024,23 @@ export default function DashboardPage() {
 
         <div
           className={`mx-auto w-full max-w-[1500px] px-5 transition-all sm:px-8 lg:px-10 ${
-            compactMode
-              ? 'py-5 lg:py-6'
-              : 'py-8 lg:py-10'
+            compactMode ? 'py-5 lg:py-6' : 'py-8 lg:py-10'
           }`}
         >
           {/* Welcome */}
 
           <section
             className={`flex flex-col justify-between xl:flex-row xl:items-end ${
-              compactMode
-                ? 'mb-5 gap-4'
-                : 'mb-9 gap-6'
+              compactMode ? 'mb-5 gap-4' : 'mb-9 gap-6'
             }`}
           >
             <div>
               <div
                 className={`flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#39ff14]/70 ${
-                  compactMode
-                    ? 'mb-2'
-                    : 'mb-4'
+                  compactMode ? 'mb-2' : 'mb-4'
                 }`}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-[#39ff14] shadow-[0_0_8px_rgba(57,255,20,0.8)]" />
-
                 MPlug Workspace
               </div>
 
@@ -1034,15 +1055,13 @@ export default function DashboardPage() {
                 <br />
 
                 <span className="bg-gradient-to-r from-white via-white to-[#39ff14] bg-clip-text text-transparent">
-                  lets get things moving.
+                  {displayName}, let&apos;s get things moving.
                 </span>
               </h1>
 
               <p
                 className={`max-w-[600px] text-sm leading-6 text-white/35 sm:text-[15px] ${
-                  compactMode
-                    ? 'mt-2'
-                    : 'mt-4'
+                  compactMode ? 'mt-2' : 'mt-4'
                 }`}
               >
                 Stay focused, keep the team aligned,
@@ -1053,17 +1072,12 @@ export default function DashboardPage() {
 
             <button
               type="button"
-              onClick={() =>
-                setCreateModalOpen(true)
-              }
+              onClick={() => setCreateModalOpen(true)}
               className={`flex w-fit items-center gap-2.5 rounded-xl border border-[#39ff14]/20 bg-[#39ff14]/[0.09] text-sm font-semibold text-[#b9ffad] shadow-[0_0_30px_rgba(57,255,20,0.06)] transition hover:border-[#39ff14]/40 hover:bg-[#39ff14]/[0.14] ${
-                compactMode
-                  ? 'px-4 py-2'
-                  : 'px-5 py-3'
+                compactMode ? 'px-4 py-2' : 'px-5 py-3'
               }`}
             >
               <Plus className="h-4 w-4" />
-
               Create task
             </button>
           </section>
@@ -1092,17 +1106,13 @@ export default function DashboardPage() {
 
           <section
             className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 ${
-              compactMode
-                ? 'mb-5 gap-2.5'
-                : 'mb-7 gap-4'
+              compactMode ? 'mb-5 gap-2.5' : 'mb-7 gap-4'
             }`}
           >
             <StatCard
               label="Total tasks"
               value={statistics.total}
-              icon={
-                <CheckCircle2 className="h-4 w-4" />
-              }
+              icon={<CheckCircle2 className="h-4 w-4" />}
               accent="green"
               description="Across your workspace"
             />
@@ -1110,9 +1120,7 @@ export default function DashboardPage() {
             <StatCard
               label="To do"
               value={statistics.todo}
-              icon={
-                <Circle className="h-4 w-4" />
-              }
+              icon={<Circle className="h-4 w-4" />}
               accent="blue"
               description="Waiting to be started"
             />
@@ -1120,9 +1128,7 @@ export default function DashboardPage() {
             <StatCard
               label="In progress"
               value={statistics.inProgress}
-              icon={
-                <Circle className="h-4 w-4" />
-              }
+              icon={<Circle className="h-4 w-4" />}
               accent="orange"
               description="Currently being worked on"
             />
@@ -1130,9 +1136,7 @@ export default function DashboardPage() {
             <StatCard
               label="Completed"
               value={statistics.completed}
-              icon={
-                <Check className="h-4 w-4" />
-              }
+              icon={<Check className="h-4 w-4" />}
               accent="purple"
               description="Successfully finished"
             />
@@ -1142,16 +1146,12 @@ export default function DashboardPage() {
 
           <section
             className={`overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.018] shadow-[0_20px_80px_rgba(0,0,0,0.18)] backdrop-blur-xl ${
-              compactMode
-                ? 'mb-5'
-                : 'mb-7'
+              compactMode ? 'mb-5' : 'mb-7'
             }`}
           >
             <div
               className={`border-b border-white/[0.05] sm:px-6 ${
-                compactMode
-                  ? 'px-4 py-3'
-                  : 'px-5 py-5'
+                compactMode ? 'px-4 py-3' : 'px-5 py-5'
               }`}
             >
               <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
@@ -1168,9 +1168,7 @@ export default function DashboardPage() {
 
                   <p
                     className={`text-xs text-white/30 ${
-                      compactMode
-                        ? 'mt-0.5'
-                        : 'mt-1.5'
+                      compactMode ? 'mt-0.5' : 'mt-1.5'
                     }`}
                   >
                     Keep an eye on what&apos;s happening
@@ -1183,20 +1181,13 @@ export default function DashboardPage() {
                   className="group flex items-center gap-2 text-xs font-medium text-white/35 transition hover:text-[#39ff14]"
                 >
                   View all
-
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Link>
               </div>
 
               {/* FILTERS */}
 
-              <div
-                className={
-                  compactMode
-                    ? 'mt-3'
-                    : 'mt-5'
-                }
-              >
+              <div className={compactMode ? 'mt-3' : 'mt-5'}>
                 <TaskFilters
                   filters={filters}
                   onChange={setFilters}
@@ -1213,9 +1204,7 @@ export default function DashboardPage() {
             ) : tasks.length === 0 ? (
               <EmptyState
                 search={searchValue}
-                hasFilters={hasActiveFilters(
-                  filters,
-                )}
+                hasFilters={hasActiveFilters(filters)}
                 compactMode={compactMode}
               />
             ) : (
@@ -1224,9 +1213,7 @@ export default function DashboardPage() {
                   <TaskRow
                     key={task.id}
                     task={task}
-                    onClick={() =>
-                      setSelectedTask(task)
-                    }
+                    onClick={() => setSelectedTask(task)}
                     onUpdated={loadTasks}
                   />
                 ))}
@@ -1238,18 +1225,14 @@ export default function DashboardPage() {
 
           <section
             className={`grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] ${
-              compactMode
-                ? 'gap-3'
-                : 'gap-5'
+              compactMode ? 'gap-3' : 'gap-5'
             }`}
           >
             {/* Workflow */}
 
             <div
               className={`relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.035] to-white/[0.012] ${
-                compactMode
-                  ? 'p-4'
-                  : 'p-6'
+                compactMode ? 'p-4' : 'p-6'
               }`}
             >
               <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-[#39ff14]/10 blur-[70px]" />
@@ -1262,9 +1245,7 @@ export default function DashboardPage() {
 
                   <h3
                     className={`font-semibold leading-tight text-white/90 ${
-                      compactMode
-                        ? 'mt-1 text-lg'
-                        : 'mt-2 text-xl'
+                      compactMode ? 'mt-1 text-lg' : 'mt-2 text-xl'
                     }`}
                   >
                     Your workspace
@@ -1278,28 +1259,18 @@ export default function DashboardPage() {
 
                 <div
                   className={`flex items-center justify-center rounded-xl border border-[#39ff14]/10 bg-[#39ff14]/[0.06] text-[#39ff14] ${
-                    compactMode
-                      ? 'h-9 w-9'
-                      : 'h-11 w-11'
+                    compactMode ? 'h-9 w-9' : 'h-11 w-11'
                   }`}
                 >
                   <Sparkles
                     className={
-                      compactMode
-                        ? 'h-4 w-4'
-                        : 'h-5 w-5'
+                      compactMode ? 'h-4 w-4' : 'h-5 w-5'
                     }
                   />
                 </div>
               </div>
 
-              <div
-                className={
-                  compactMode
-                    ? 'mt-5'
-                    : 'mt-9'
-                }
-              >
+              <div className={compactMode ? 'mt-5' : 'mt-9'}>
                 <div className="flex h-3 overflow-hidden rounded-full bg-white/[0.04]">
                   <span
                     className="bg-[#38bdf8]"
@@ -1334,25 +1305,12 @@ export default function DashboardPage() {
 
                 <div
                   className={`flex flex-wrap gap-x-6 gap-y-3 ${
-                    compactMode
-                      ? 'mt-3'
-                      : 'mt-5'
+                    compactMode ? 'mt-3' : 'mt-5'
                   }`}
                 >
-                  <Legend
-                    color="bg-[#38bdf8]"
-                    label="To do"
-                  />
-
-                  <Legend
-                    color="bg-[#f59e0b]"
-                    label="In progress"
-                  />
-
-                  <Legend
-                    color="bg-[#a855f7]"
-                    label="Completed"
-                  />
+                  <Legend color="bg-[#38bdf8]" label="To do" />
+                  <Legend color="bg-[#f59e0b]" label="In progress" />
+                  <Legend color="bg-[#a855f7]" label="Completed" />
                 </div>
               </div>
             </div>
@@ -1361,9 +1319,7 @@ export default function DashboardPage() {
 
             <div
               className={`group relative overflow-hidden rounded-2xl border border-[#39ff14]/10 bg-[#39ff14]/[0.035] transition hover:border-[#39ff14]/20 hover:bg-[#39ff14]/[0.05] ${
-                compactMode
-                  ? 'p-4'
-                  : 'p-6'
+                compactMode ? 'p-4' : 'p-6'
               }`}
             >
               <div className="absolute -bottom-20 -right-20 h-44 w-44 rounded-full bg-[#39ff14]/10 blur-[70px]" />
@@ -1371,16 +1327,12 @@ export default function DashboardPage() {
               <div className="relative flex h-full flex-col">
                 <div
                   className={`flex items-center justify-center rounded-xl border border-[#39ff14]/15 bg-[#39ff14]/[0.08] text-[#39ff14] ${
-                    compactMode
-                      ? 'mb-3 h-9 w-9'
-                      : 'mb-5 h-11 w-11'
+                    compactMode ? 'mb-3 h-9 w-9' : 'mb-5 h-11 w-11'
                   }`}
                 >
                   <Plus
                     className={
-                      compactMode
-                        ? 'h-4 w-4'
-                        : 'h-5 w-5'
+                      compactMode ? 'h-4 w-4' : 'h-5 w-5'
                     }
                   />
                 </div>
@@ -1391,9 +1343,7 @@ export default function DashboardPage() {
 
                 <h3
                   className={`font-semibold text-white/85 ${
-                    compactMode
-                      ? 'mt-1 text-base'
-                      : 'mt-2 text-lg'
+                    compactMode ? 'mt-1 text-base' : 'mt-2 text-lg'
                   }`}
                 >
                   Create a new task
@@ -1401,9 +1351,7 @@ export default function DashboardPage() {
 
                 <p
                   className={`max-w-[340px] text-xs leading-5 text-white/30 ${
-                    compactMode
-                      ? 'mt-1'
-                      : 'mt-2'
+                    compactMode ? 'mt-1' : 'mt-2'
                   }`}
                 >
                   Turn an idea into an actionable
@@ -1412,13 +1360,9 @@ export default function DashboardPage() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setCreateModalOpen(true)
-                  }
+                  onClick={() => setCreateModalOpen(true)}
                   className={`mt-auto flex items-center justify-center self-end rounded-xl border border-white/[0.06] bg-white/[0.025] text-white/40 transition hover:border-[#39ff14]/20 hover:bg-[#39ff14]/10 hover:text-[#39ff14] ${
-                    compactMode
-                      ? 'h-9 w-9'
-                      : 'h-10 w-10'
+                    compactMode ? 'h-9 w-9' : 'h-10 w-10'
                   }`}
                 >
                   <ArrowRight className="h-4 w-4" />
@@ -1433,9 +1377,7 @@ export default function DashboardPage() {
 
       <CreateTaskModal
         open={createModalOpen}
-        onClose={() =>
-          setCreateModalOpen(false)
-        }
+        onClose={() => setCreateModalOpen(false)}
         onCreated={loadTasks}
       />
 
@@ -1444,9 +1386,7 @@ export default function DashboardPage() {
       <TaskDetailsModal
         task={selectedTask}
         open={selectedTask !== null}
-        onClose={() =>
-          setSelectedTask(null)
-        }
+        onClose={() => setSelectedTask(null)}
         onEdit={() => {
           setEditTask(selectedTask);
           setSelectedTask(null);
@@ -1462,9 +1402,7 @@ export default function DashboardPage() {
       <DeleteTaskModal
         task={deleteTaskItem}
         open={!!deleteTaskItem}
-        onClose={() =>
-          setDeleteTaskItem(null)
-        }
+        onClose={() => setDeleteTaskItem(null)}
         onDeleted={() => {
           setDeleteTaskItem(null);
           loadTasks();
@@ -1505,16 +1443,12 @@ function NotificationPanel({
   unreadCount: number;
   readNotificationIds: string[];
   onClose: () => void;
-  onMarkRead: (
-    notificationId: string,
-  ) => void;
+  onMarkRead: (notificationId: string) => void;
   onMarkAllRead: () => void;
   onClear: () => void;
 }) {
   return (
     <div className="absolute right-0 top-12 z-50 w-[min(380px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#07100d]/95 shadow-[0_25px_80px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
-      {/* HEADER */}
-
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-4">
         <div>
           <div className="flex items-center gap-2">
@@ -1522,12 +1456,11 @@ function NotificationPanel({
               Notifications
             </h3>
 
-            {enabled &&
-              unreadCount > 0 && (
-                <span className="rounded-full bg-[#39ff14]/10 px-2 py-0.5 text-[9px] font-semibold text-[#39ff14]">
-                  {unreadCount} unread
-                </span>
-              )}
+            {enabled && unreadCount > 0 && (
+              <span className="rounded-full bg-[#39ff14]/10 px-2 py-0.5 text-[9px] font-semibold text-[#39ff14]">
+                {unreadCount} unread
+              </span>
+            )}
           </div>
 
           <p className="mt-1 text-[11px] text-white/30">
@@ -1544,8 +1477,6 @@ function NotificationPanel({
           <X className="h-4 w-4" />
         </button>
       </div>
-
-      {/* DISABLED */}
 
       {!enabled ? (
         <div className="px-6 py-10 text-center">
@@ -1572,8 +1503,6 @@ function NotificationPanel({
           </Link>
         </div>
       ) : notifications.length === 0 ? (
-        /* EMPTY */
-
         <div className="px-6 py-10 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#39ff14]/10 bg-[#39ff14]/[0.04] text-[#39ff14]/70">
             <CheckCheck className="h-5 w-5" />
@@ -1590,17 +1519,11 @@ function NotificationPanel({
         </div>
       ) : (
         <>
-          {/* ACTIONS */}
-
           <div className="flex items-center justify-between border-b border-white/[0.05] px-4 py-2.5">
             <button
               type="button"
-              onClick={
-                onMarkAllRead
-              }
-              disabled={
-                unreadCount === 0
-              }
+              onClick={onMarkAllRead}
+              disabled={unreadCount === 0}
               className="inline-flex items-center gap-1.5 text-[10px] font-medium text-white/35 transition hover:text-[#39ff14] disabled:cursor-not-allowed disabled:opacity-30"
             >
               <CheckCheck className="h-3.5 w-3.5" />
@@ -1617,74 +1540,62 @@ function NotificationPanel({
             </button>
           </div>
 
-          {/* LIST */}
-
           <div className="max-h-[420px] overflow-y-auto">
-            {notifications.map(
-              (notification) => {
-                const read =
-                  readNotificationIds.includes(
-                    notification.id,
-                  );
+            {notifications.map((notification) => {
+              const read =
+                readNotificationIds.includes(notification.id);
 
-                return (
-                  <Link
-                    key={notification.id}
-                    href="/dashboard/my-tasks"
-                    onClick={() => {
-                      onMarkRead(
-                        notification.id,
-                      );
-                      onClose();
-                    }}
-                    className={`group block border-b border-white/[0.045] px-4 py-4 transition last:border-b-0 hover:bg-white/[0.025] ${
-                      read
-                        ? 'opacity-55'
-                        : 'bg-[#39ff14]/[0.015]'
-                    }`}
-                  >
-                    <div className="flex gap-3">
-                      <div
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                          notification.type ===
-                          'overdue'
-                            ? 'bg-red-400/10 text-red-300'
-                            : 'bg-orange-400/10 text-orange-300'
-                        }`}
-                      >
-                        {notification.type ===
-                        'overdue' ? (
-                          <Clock3 className="h-4 w-4" />
-                        ) : (
-                          <AlertTriangle className="h-4 w-4" />
+              return (
+                <Link
+                  key={notification.id}
+                  href="/dashboard/my-tasks"
+                  onClick={() => {
+                    onMarkRead(notification.id);
+                    onClose();
+                  }}
+                  className={`group block border-b border-white/[0.045] px-4 py-4 transition last:border-b-0 hover:bg-white/[0.025] ${
+                    read ? 'opacity-55' : 'bg-[#39ff14]/[0.015]'
+                  }`}
+                >
+                  <div className="flex gap-3">
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                        notification.type === 'overdue'
+                          ? 'bg-red-400/10 text-red-300'
+                          : 'bg-orange-400/10 text-orange-300'
+                      }`}
+                    >
+                      {notification.type === 'overdue' ? (
+                        <Clock3 className="h-4 w-4" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4" />
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-xs font-semibold text-white/80">
+                          {notification.title}
+                        </p>
+
+                        {!read && (
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#39ff14] shadow-[0_0_7px_rgba(57,255,20,0.8)]" />
                         )}
                       </div>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-xs font-semibold text-white/80">
-                            {notification.title}
-                          </p>
+                      <p className="mt-1 text-[11px] leading-5 text-white/35">
+                        {notification.message}
+                      </p>
 
-                          {!read && (
-                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#39ff14] shadow-[0_0_7px_rgba(57,255,20,0.8)]" />
-                          )}
-                        </div>
-
-                        <p className="mt-1 text-[11px] leading-5 text-white/35">
-                          {notification.message}
-                        </p>
-
-                        <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-white/25 transition group-hover:text-[#39ff14]">
-                          View task
-                          <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-                        </span>
-                      </div>
+                      <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-white/25 transition group-hover:text-[#39ff14]">
+                        View task
+                        <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                      </span>
                     </div>
-                  </Link>
-                );
-              },
-            )}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </>
       )}
@@ -1721,10 +1632,14 @@ function Background() {
    AVATAR
 ========================================================================== */
 
-function Avatar() {
+function Avatar({
+  initials,
+}: {
+  initials: string;
+}) {
   return (
     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#39ff14]/20 bg-[#39ff14]/10 text-[10px] font-bold text-[#39ff14]">
-      MP
+      {initials}
     </div>
   );
 }
@@ -1814,10 +1729,7 @@ function Legend({
 }) {
   return (
     <span className="flex items-center gap-2 text-[10px] text-white/35">
-      <i
-        className={`h-2 w-2 rounded-full ${color}`}
-      />
-
+      <i className={`h-2 w-2 rounded-full ${color}`} />
       {label}
     </span>
   );
